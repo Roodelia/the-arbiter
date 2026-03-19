@@ -588,16 +588,27 @@ export default function Index() {
   ).current;
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled">
-      <SvgXml
-        xml={ARBITER_LOGO_XML}
-        width={280}
-        height={70}
-        style={{ alignSelf: 'center', marginBottom: 8 }}
-      />
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: '#000000',
+        overflow: 'hidden',
+      }}>
+      <ScrollView
+        ref={scrollViewRef}
+        bounces={false}
+        overScrollMode="never"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={true}
+        directionalLockEnabled={true}>
+        <SvgXml
+          xml={ARBITER_LOGO_XML}
+          width={280}
+          height={70}
+          style={{ alignSelf: 'center', marginBottom: 8 }}
+        />
 
       {step === 1 ? (
         <>
@@ -658,13 +669,14 @@ export default function Index() {
                     position: 'relative',
                     overflow: 'visible',
                   }}>
-                  <Animated.View
-                    {...panResponder.panHandlers}
-                    style={{
-                      opacity: cardFadeOpacity,
-                      width: '100%',
-                      aspectRatio: 63 / 88,
-                    }}>
+                  <View pointerEvents="box-only">
+                    <Animated.View
+                      {...panResponder.panHandlers}
+                      style={{
+                        opacity: cardFadeOpacity,
+                        width: '100%',
+                        aspectRatio: 63 / 88,
+                      }}>
                     {selectedCards[cardIndex]?.image_uri ? (
                       <Image
                         source={{ uri: selectedCards[cardIndex]!.image_uri as string }}
@@ -678,7 +690,8 @@ export default function Index() {
                         resizeMode="cover"
                       />
                     ) : null}
-                  </Animated.View>
+                    </Animated.View>
+                  </View>
 
                   {selectedCards.length > 1 && cardIndex > 0 ? (
                     <TouchableOpacity
@@ -1041,7 +1054,8 @@ export default function Index() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
