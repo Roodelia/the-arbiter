@@ -33,6 +33,9 @@ function CardName({ name }: { name: string }) {
 const MAX_CARDS = 6;
 const BACKEND_BASE_URL = 'https://the-arbiter-production.up.railway.app';
 
+const RATE_LIMIT_MESSAGE =
+  "You've reached the limit of 60 rulings per hour. Please try again later.";
+
 const COLOURS = {
   background: '#000000',
   surface: '#111111',
@@ -212,6 +215,12 @@ export default function Index() {
         signal: controller.signal,
       });
 
+      if (res.status === 429) {
+        setCategories([]);
+        setSelectedCategory(null);
+        setErrorMessage(RATE_LIMIT_MESSAGE);
+        return;
+      }
       if (!res.ok) throw new Error('Failed to fetch categories');
       const json = (await res.json()) as CategoriesResponse;
       const next = Array.isArray(json.categories) ? json.categories : [];
@@ -271,6 +280,10 @@ export default function Index() {
         signal: controller.signal,
       });
 
+      if (res.status === 429) {
+        setErrorMessage(RATE_LIMIT_MESSAGE);
+        return;
+      }
       if (!res.ok) throw new Error('Failed to fetch ruling');
       const json = (await res.json()) as RulingResponse;
       setRulingResult(json);
@@ -331,6 +344,11 @@ export default function Index() {
           situation: detail,
         }),
       });
+      if (res.status === 429) {
+        setRefineError('');
+        setErrorMessage(RATE_LIMIT_MESSAGE);
+        return;
+      }
       if (!res.ok) throw new Error('Failed to refine ruling');
       const json = (await res.json()) as RulingResponse;
       setRulingResult(json);

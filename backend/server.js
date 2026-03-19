@@ -7,6 +7,20 @@ const path = require("path");
 const Anthropic = require("@anthropic-ai/sdk");
 const { VoyageAIClient } = require("voyageai");
 const { createClient } = require("@supabase/supabase-js");
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+  windowMs: 60 * 60 * 1000,  // 1 hour window
+  max: 60,                     // max 60 requests per IP per hour
+  standardHeaders: true,       // return rate limit info in headers
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests. You have reached the limit of 60 rulings per hour. Please try again later.'
+  },
+  handler: (req, res, next, options) => {
+    res.status(429).json(options.message);
+  }
+});
 
 const FLAGGED_RULINGS_PATH = path.join(__dirname, "flagged_rulings.jsonl");
 
@@ -21,6 +35,10 @@ app.use(cors({
   ]
 }));
 app.use(express.json());
+
+// Apply to /categories and /ruling endpoints only
+app.use('/categories', limiter);
+app.use('/ruling', limiter);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
