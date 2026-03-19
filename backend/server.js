@@ -13,7 +13,12 @@ const FLAGGED_RULINGS_PATH = path.join(__dirname, "flagged_rulings.jsonl");
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:8081',
+    'https://the-arbiter-production.up.railway.app',
+  ]
+}));
 app.use(express.json());
 
 const anthropic = new Anthropic({
