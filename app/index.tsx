@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   Image,
+  PanResponder,
   ScrollView,
   StyleSheet,
   Text,
@@ -166,9 +167,16 @@ export default function Index() {
     [selectedCards]
   );
 
+  const prevSelectedCardsLengthRef = useRef(selectedCards.length);
   useEffect(() => {
-    // Reset to the first card whenever the selection changes.
-    setCardIndex(0);
+    // Reset to the first card when cards are removed; when cards are added,
+    // jump to the newly-added (last) card.
+    if (selectedCards.length > prevSelectedCardsLengthRef.current) {
+      setCardIndex(selectedCards.length - 1);
+    } else {
+      setCardIndex(0);
+    }
+    prevSelectedCardsLengthRef.current = selectedCards.length;
   }, [selectedCards.length]);
 
   useEffect(() => {
@@ -273,10 +281,12 @@ export default function Index() {
 
         if (prev.length >= MAX_CARDS) return prev;
 
-        return [...prev, { name: cardName, image_uri: null }].slice(
+        const updated = [...prev, { name: cardName, image_uri: null }].slice(
           0,
           MAX_CARDS
         );
+        setCardIndex(updated.length - 1);
+        return updated;
       });
 
       void (async () => {
@@ -553,6 +563,28 @@ export default function Index() {
     setStep(2);
   }, []);
 
+  const swipeThreshold = 50;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -swipeThreshold) {
+          // Swipe left — go to next card
+          setCardIndex((prev) =>
+            prev < selectedCards.length - 1 ? prev + 1 : prev
+          );
+        } else if (gestureState.dx > swipeThreshold) {
+          // Swipe right — go to previous card
+          setCardIndex((prev) => (prev > 0 ? prev - 1 : prev));
+        }
+      },
+    })
+  ).current;
+
   return (
     <ScrollView
       ref={scrollViewRef}
@@ -625,6 +657,7 @@ export default function Index() {
                     overflow: 'visible',
                   }}>
                   <Animated.View
+                    {...panResponder.panHandlers}
                     style={{
                       opacity: cardFadeOpacity,
                       width: '100%',
@@ -648,7 +681,10 @@ export default function Index() {
                   {selectedCards.length > 1 && cardIndex > 0 ? (
                     <TouchableOpacity
                       onPress={() => setCardIndex((i) => Math.max(0, i - 1))}
-                      style={[styles.carouselArrow, { left: -18 }]}>
+                      style={[
+                        styles.carouselArrow,
+                        { left: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
+                      ]}>
                       <Text style={styles.carouselArrowLabel}>‹</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -660,7 +696,10 @@ export default function Index() {
                           Math.min(selectedCards.length - 1, i + 1)
                         )
                       }
-                      style={[styles.carouselArrow, { right: -18 }]}>
+                      style={[
+                        styles.carouselArrow,
+                        { right: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
+                      ]}>
                       <Text style={styles.carouselArrowLabel}>›</Text>
                     </TouchableOpacity>
                   ) : null}
