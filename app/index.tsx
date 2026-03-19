@@ -2,11 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Modal,
+  Platform,
   Pressable,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -24,6 +30,11 @@ type RulingResponse = {
   explanation: string;
   rules_cited: string[];
   oracle_referenced: string;
+};
+
+type SelectedCard = {
+  name: string;
+  image_uri: string | null;
 };
 
 function CardName({ name }: { name: string }) {
@@ -98,7 +109,7 @@ export default function Index() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [selectedCards, setSelectedCards] = useState<SelectedCard[]>([]);
 
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -111,8 +122,9 @@ export default function Index() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [flagged, setFlagged] = useState(false);
+  const [flagModalVisible, setFlagModalVisible] = useState(false);
+  const [flagReason, setFlagReason] = useState('');
   const [flagging, setFlagging] = useState(false);
-  const [flagReasonText, setFlagReasonText] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
 
   const [refineText, setRefineText] = useState('');
@@ -120,6 +132,15 @@ export default function Index() {
   const [refineError, setRefineError] = useState('');
 
   const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const sessionId = useRef(Math.random().toString(36).substring(2)).current;
+  const generateId = () =>
+    Math.random().toString(36).substring(2) +
+    Math.random().toString(36).substring(2);
+  const caseId = useRef(generateId());
+  const { width } = useWindowDimensions();
+  const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
+  const [cardIndex, setCardIndex] = useState(0);
+  const cardFadeOpacity = useRef(new Animated.Value(1)).current;
   const rulingCardScrollYRef = useRef(0);
 
   const autocompleteAbortRef = useRef<AbortController | null>(null);
@@ -134,6 +155,46 @@ export default function Index() {
     () => `${selectedCards.length}/${MAX_CARDS}`,
     [selectedCards.length]
   );
+
+  // Used to avoid refetching categories when only image_uri changes.
+  const selectedCardNamesKey = useMemo(
+    () => selectedCards.map((c) => c.name).join('|'),
+    [selectedCards]
+  );
+
+  useEffect(() => {
+    // Reset to the first card whenever the selection changes.
+    setCardIndex(0);
+  }, [selectedCards.length]);
+
+  useEffect(() => {
+    if (selectedCards.length <= 1) return;
+
+    Animated.timing(cardFadeOpacity, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      Animated.timing(cardFadeOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+    });
+  }, [cardIndex, cardFadeOpacity, selectedCards.length]);
+
+  const logCase = async (data: Record<string, unknown>) => {
+    try {
+      await fetch(`${BACKEND_BASE_URL}/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, case_id: caseId.current, ...data }),
+      });
+    } catch (e) {
+      // Fail silently — logging should never block the user
+    }
+  };
 
   const fetchAutocomplete = useCallback(async (q: string) => {
     autocompleteAbortRef.current?.abort();
@@ -152,6 +213,25 @@ export default function Index() {
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       setSuggestions([]);
+    }
+  }, []);
+
+  const fetchCardImageUri = useCallback(async (cardName: string) => {
+    try {
+      const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(
+        cardName
+      )}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (
+        data.image_uris?.normal ||
+        data.image_uris?.large ||
+        data.card_faces?.[0]?.image_uris?.normal ||
+        null
+      );
+    } catch {
+      return null;
     }
   }, []);
 
@@ -175,22 +255,50 @@ export default function Index() {
     (cardName: string) => {
       setErrorMessage(null);
 
+      const normalized = cardName.trim().toLowerCase();
+
       setSelectedCards((prev) => {
+        const existsIndex = prev.findIndex(
+          (c) => c.name.trim().toLowerCase() === normalized
+        );
+
+        if (existsIndex !== -1) {
+          // Preserve existing image_uri; only refresh the display name casing.
+          return prev.map((c, idx) => (idx === existsIndex ? { ...c, name: cardName } : c));
+        }
+
         if (prev.length >= MAX_CARDS) return prev;
-        const next = uniqCaseInsensitive([...prev, cardName]);
-        return next.slice(0, MAX_CARDS);
+
+        return [...prev, { name: cardName, image_uri: null }].slice(
+          0,
+          MAX_CARDS
+        );
       });
+
+      void (async () => {
+        const image_uri = await fetchCardImageUri(cardName);
+        setSelectedCards((prev) =>
+          prev.map((c) =>
+            c.name.trim().toLowerCase() === normalized
+              ? { ...c, image_uri }
+              : c
+          )
+        );
+      })();
 
       setQuery('');
       setSuggestions([]);
       setRulingResult(null);
       setStep((prev) => (prev === 3 ? 2 : prev));
     },
-    [setSelectedCards]
+    [fetchCardImageUri]
   );
 
   const removeCard = useCallback((cardName: string) => {
-    setSelectedCards((prev) => prev.filter((c) => c !== cardName));
+    const normalized = cardName.trim().toLowerCase();
+    setSelectedCards((prev) =>
+      prev.filter((c) => c.name.trim().toLowerCase() !== normalized)
+    );
     setRulingResult(null);
     setStep((prev) => (prev === 3 ? 2 : prev));
   }, []);
@@ -248,8 +356,8 @@ export default function Index() {
       return;
     }
 
-    void fetchCategories(selectedCards);
-  }, [canRequestCategories, fetchCategories, selectedCards, step]);
+    void fetchCategories(selectedCards.map((c) => c.name));
+  }, [canRequestCategories, fetchCategories, selectedCardNamesKey, step]);
 
   useEffect(() => {
     if (step > 1 && selectedCards.length < 1) {
@@ -261,15 +369,21 @@ export default function Index() {
     setErrorMessage(null);
     setRulingResult(null);
 
+    void logCase({
+      cards: selectedCards.map((c) => c.name),
+      selected_category: selectedCategory ?? undefined,
+      situation: situation.trim() || undefined,
+    });
+
     rulingAbortRef.current?.abort();
     const controller = new AbortController();
     rulingAbortRef.current = controller;
 
     setIsRulingLoading(true);
     try {
-      const payload: { cards: string[]; situation?: string; category?: string } = {
-        cards: selectedCards,
-      };
+    const payload: { cards: string[]; situation?: string; category?: string } = {
+      cards: selectedCards.map((c) => c.name),
+    };
       if (selectedCategory) payload.category = selectedCategory;
       if (situation.trim()) payload.situation = situation.trim();
 
@@ -286,6 +400,16 @@ export default function Index() {
       }
       if (!res.ok) throw new Error('Failed to fetch ruling');
       const json = (await res.json()) as RulingResponse;
+
+      void logCase({
+        cards: selectedCards.map((c) => c.name),
+        selected_category: selectedCategory ?? undefined,
+        situation: situation.trim() || undefined,
+        ruling: json.ruling,
+        explanation: json.explanation,
+        rules_cited: json.rules_cited,
+      });
+
       setRulingResult(json);
       setStep(3);
     } catch (err) {
@@ -311,23 +435,60 @@ export default function Index() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cards: selectedCards,
+          cards: selectedCards.map((c) => c.name),
           category: selectedCategory ?? undefined,
           situation: situation.trim() || undefined,
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,
           rules_cited: rulingResult.rules_cited,
-          reason: flagReasonText.trim() || undefined,
+          reason: '',
         }),
       });
       if (!res.ok) throw new Error('Flag request failed');
       setFlagged(true);
+      setFlagModalVisible(true);
+      void logCase({
+        cards: selectedCards.map((c) => c.name),
+        selected_category: selectedCategory ?? undefined,
+        situation: situation.trim() || undefined,
+        ruling: rulingResult.ruling,
+        flagged: true,
+        flag_reason: flagReason,
+      });
     } catch {
       setFlagError('Could not flag the ruling. Please try again.');
     } finally {
       setFlagging(false);
     }
-  }, [rulingResult, selectedCards, selectedCategory, situation, flagReasonText, flagging, flagged]);
+  }, [rulingResult, selectedCards, selectedCategory, situation, flagging, flagged, flagReason]);
+
+  const onSubmitFlagReason = useCallback(async () => {
+    if (!rulingResult || flagging) return;
+    setFlagError(null);
+    setFlagging(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cards: selectedCards.map((c) => c.name),
+          category: selectedCategory ?? undefined,
+          situation: situation.trim() || undefined,
+          ruling: rulingResult.ruling,
+          explanation: rulingResult.explanation,
+          rules_cited: rulingResult.rules_cited,
+          reason: flagReason.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Flag request failed');
+      setFlagModalVisible(false);
+      setFlagReason('');
+    } catch {
+      setFlagError('Could not submit details. Please try again.');
+    } finally {
+      setFlagging(false);
+    }
+  }, [rulingResult, selectedCards, selectedCategory, situation, flagReason, flagging]);
 
   const onRefineRuling = useCallback(async () => {
     const detail = refineText.trim();
@@ -339,7 +500,7 @@ export default function Index() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cards: selectedCards,
+          cards: selectedCards.map((c) => c.name),
           category: selectedCategory ?? undefined,
           situation: detail,
         }),
@@ -372,8 +533,9 @@ export default function Index() {
     setSelectedCategory(null);
     setSituation('');
     setFlagged(false);
+    setFlagModalVisible(false);
     setFlagging(false);
-    setFlagReasonText('');
+    setFlagReason('');
     setFlagError(null);
     setRefineText('');
     setRefining(false);
@@ -408,8 +570,8 @@ export default function Index() {
                 value={query}
                 onChangeText={setQuery}
                 placeholder="Search for a card..."
-              placeholderTextColor={COLOURS.textMuted}
-                style={styles.input}
+                placeholderTextColor={COLOURS.textMuted}
+                style={[styles.input, styles.searchInput]}
                 autoCorrect={false}
                 autoCapitalize="none"
               />
@@ -437,18 +599,88 @@ export default function Index() {
             ) : null}
 
             <View style={styles.chipsRow}>
-              {selectedCards.map((c) => (
+              {selectedCards.map((card) => (
                 <Pressable
-                  key={c}
-                  onPress={() => removeCard(c)}
+                  key={card.name}
+                  onPress={() => removeCard(card.name)}
                   style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
                   <Text style={styles.chipText} numberOfLines={1}>
-                    <CardName name={c} /> {'  '}
+                    <CardName name={card.name} /> {'  '}
                     <Text style={styles.removeMark}>×</Text>
                   </Text>
                 </Pressable>
               ))}
             </View>
+
+            {selectedCards.length > 0 ? (
+              <View style={{ width: '100%', alignItems: 'center', marginTop: 12 }}>
+                <View
+                  style={{
+                    width: cardWidth,
+                    position: 'relative',
+                    overflow: 'visible',
+                  }}>
+                  <Animated.View
+                    style={{
+                      opacity: cardFadeOpacity,
+                      width: '100%',
+                      aspectRatio: 63 / 88,
+                    }}>
+                    {selectedCards[cardIndex]?.image_uri ? (
+                      <Image
+                        source={{ uri: selectedCards[cardIndex]!.image_uri as string }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: '#1e1e1e',
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                  </Animated.View>
+
+                  {selectedCards.length > 1 && cardIndex > 0 ? (
+                    <TouchableOpacity
+                      onPress={() => setCardIndex((i) => Math.max(0, i - 1))}
+                      style={[styles.carouselArrow, { left: -18 }]}>
+                      <Text style={styles.carouselArrowLabel}>‹</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {selectedCards.length > 1 && cardIndex < selectedCards.length - 1 ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        setCardIndex((i) =>
+                          Math.min(selectedCards.length - 1, i + 1)
+                        )
+                      }
+                      style={[styles.carouselArrow, { right: -18 }]}>
+                      <Text style={styles.carouselArrowLabel}>›</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {selectedCards.length > 1 ? (
+                  <View style={styles.carouselDotsRow}>
+                    {selectedCards.map((_, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.carouselDot,
+                          index === cardIndex ? styles.carouselDotActive : null,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+
+                <Text style={styles.carouselCardName}>
+                  {selectedCards[cardIndex]?.name ?? ''}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {!canGoToStep2 ? (
@@ -461,14 +693,17 @@ export default function Index() {
 
           <View style={styles.section}>
             <Pressable
-              onPress={goToStep2}
+              onPress={() => {
+                void logCase({ cards: selectedCards.map((c) => c.name) });
+                goToStep2();
+              }}
               disabled={!canGoToStep2}
               style={({ pressed }) => [
                 styles.primaryButton,
                 !canGoToStep2 && styles.primaryButtonDisabled,
                 pressed && canGoToStep2 && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Next: Describe the situation</Text>
+              <Text style={styles.primaryButtonText}>Present your case</Text>
             </Pressable>
           </View>
         </>
@@ -479,13 +714,13 @@ export default function Index() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Selected cards</Text>
             <View style={styles.chipsRow}>
-              {selectedCards.map((c) => (
+              {selectedCards.map((card) => (
                 <Pressable
-                  key={c}
-                  onPress={() => removeCard(c)}
+                  key={card.name}
+                  onPress={() => removeCard(card.name)}
                   style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
                   <Text style={styles.chipText} numberOfLines={1}>
-                    <CardName name={c} /> {'  '}
+                    <CardName name={card.name} /> {'  '}
                     <Text style={styles.removeMark}>×</Text>
                   </Text>
                 </Pressable>
@@ -494,7 +729,7 @@ export default function Index() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Step 2: Select category and/or describe situation</Text>
+            <Text style={styles.sectionLabel}>Step 2: Select interaction and/or describe situation</Text>
             {isCategoriesLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={COLOURS.chipSelected} />
@@ -531,7 +766,6 @@ export default function Index() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Situation (optional)</Text>
             <TextInput
               value={situation}
               onChangeText={setSituation}
@@ -565,10 +799,10 @@ export default function Index() {
                 {isRulingLoading ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator color={COLOURS.text} />
-                    <Text style={styles.primaryButtonText}>Getting ruling…</Text>
+                    <Text style={styles.primaryButtonText}>Jury deliberating…</Text>
                   </View>
                 ) : (
-                  <Text style={styles.primaryButtonText}>Judge!!!</Text>
+                  <Text style={styles.primaryButtonText}>Get Verdict</Text>
                 )}
               </Pressable>
             </View>
@@ -615,7 +849,7 @@ export default function Index() {
               </View>
 
               <View style={styles.refineDivider} />
-              <Text style={styles.refineSectionLabel}>Incorrect scenario?</Text>
+              <Text style={styles.refineSectionLabel}>New evidence?</Text>
               <TextInput
                 value={refineText}
                 onChangeText={setRefineText}
@@ -625,86 +859,79 @@ export default function Index() {
                 multiline
                 textAlignVertical="top"
               />
-              <Pressable
-                onPress={onRefineRuling}
-                disabled={refineText.trim().length === 0 || refining}
-                style={({ pressed }) => [
-                  styles.refineButtonBase,
-                  refineText.trim().length > 0 && !refining
-                    ? styles.refineButtonEnabled
-                    : styles.refineButtonDisabled,
-                  pressed &&
-                    refineText.trim().length > 0 &&
-                    !refining &&
-                    styles.pressed,
-                ]}>
-                <Text
-                  style={
-                    refineText.trim().length > 0 && !refining
-                      ? styles.refineButtonTextEnabled
-                      : styles.refineButtonTextDisabled
-                  }>
-                  {refining ? 'Arbitering...' : 'Judge, again!!!'}
-                </Text>
-              </Pressable>
-              {refineError ? (
-                <Text style={styles.refineErrorText}>{refineError}</Text>
-              ) : null}
-
-              <View style={styles.buttonRow}>
-                <Pressable
-                  onPress={goToStep2}
-                  style={({ pressed }) => [
-                    styles.tertiaryButton,
-                    pressed && styles.pressed,
+              <View style={{ width: '100%', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={onRefineRuling}
+                  disabled={refineText.trim().length === 0 || refining}
+                  style={[
+                    styles.secondaryButton,
+                    { width: '100%' },
+                    refineText.trim().length === 0 && !refining
+                      ? { borderColor: '#585858' }
+                      : null,
+                    (refineText.trim().length === 0 || refining) && styles.primaryButtonDisabled,
                   ]}>
-                  <Text style={styles.tertiaryButtonText}>Back</Text>
-                </Pressable>
+                  {refining ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color="#9b2335" />
+                      <Text style={styles.secondaryButtonText}>Arbitering...</Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.secondaryButtonText,
+                        refineText.trim().length === 0 && !refining
+                          ? { color: '#585858' }
+                          : null,
+                      ]}>
+                      Judge, again!!!
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                {refineError ? (
+                  <Text style={styles.refineErrorText}>{refineError}</Text>
+                ) : null}
 
-                <Pressable
-                  onPress={goToStep1}
-                  style={({ pressed }) => [
-                    styles.tertiaryButton,
-                    styles.startOverButton,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.tertiaryButtonText, styles.startOverButtonText]}>Start over</Text>
-                </Pressable>
-              </View>
-
-              {flagged ? (
-                <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
-              ) : (
-                <View style={styles.flagSection}>
-                  <TextInput
-                    value={flagReasonText}
-                    onChangeText={setFlagReasonText}
-                    placeholder="What was wrong with this ruling? (optional)"
-                    placeholderTextColor="#3a3a3a"
-                    style={[styles.input, styles.flagReasonInput]}
-                    multiline
-                    textAlignVertical="top"
-                  />
-                  <Pressable
-                    onPress={onFlag}
-                    disabled={flagging}
-                    style={({ pressed }) => [
-                      styles.secondaryButton,
-                      flagging && styles.primaryButtonDisabled,
-                      pressed && !flagging && styles.pressed,
-                    ]}>
-                    {flagging ? (
-                      <View style={styles.loadingRow}>
-                        <ActivityIndicator color="#9b2335" />
-                        <Text style={styles.secondaryButtonText}>Flagging…</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.secondaryButtonText}>Flag This Ruling</Text>
-                    )}
-                  </Pressable>
-                  {flagError ? <Text style={styles.flagErrorText}>{flagError}</Text> : null}
+                <View style={{ flexDirection: 'row', width: '100%', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={goToStep2}
+                    style={[styles.tertiaryButton, { flex: 1, marginTop: 0 }]}>
+                    <Text style={styles.tertiaryButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      caseId.current = generateId();
+                      goToStep1();
+                    }}
+                    style={[styles.primaryButton, { flex: 3, marginTop: 0, backgroundColor: COLOURS.titleAccent }]}>
+                    <Text style={styles.primaryButtonText}>Next Case</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
+
+                {flagged ? (
+                  <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      onPress={onFlag}
+                      disabled={flagging}
+                      style={[
+                        styles.flagButton,
+                        flagging && styles.primaryButtonDisabled,
+                      ]}>
+                      {flagging ? (
+                        <View style={styles.loadingRow}>
+                          <ActivityIndicator color="#9b2335" />
+                          <Text style={styles.flagButtonText}>Appealing…</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.flagButtonText}>Appeal this ruling</Text>
+                      )}
+                    </TouchableOpacity>
+                    {flagError ? <Text style={styles.flagErrorText}>{flagError}</Text> : null}
+                  </>
+                )}
+              </View>
             </View>
           ) : (
             <View style={styles.helperBox}>
@@ -713,6 +940,60 @@ export default function Index() {
           )}
         </>
       ) : null}
+      <Modal transparent animationType="fade" visible={flagModalVisible}>
+        <View style={styles.flagModalOverlay}>
+          <View style={styles.flagModalCard}>
+            <Text style={styles.flagModalTitle}>Thanks for Appealing</Text>
+            <Text style={styles.flagModalSubtitle}>
+              Would you like to tell us what was wrong? (optional)
+            </Text>
+            <TextInput
+              value={flagReason}
+              onChangeText={setFlagReason}
+              placeholder="What was wrong with the ruling? (optional)"
+              placeholderTextColor="#3a3a3a"
+              style={[styles.input, styles.multilineInput, styles.flagModalInput]}
+              multiline
+              textAlignVertical="top"
+            />
+            <View style={styles.flagModalActions}>
+              <Pressable
+                onPress={() => {
+                  setFlagModalVisible(false);
+                  setFlagReason('');
+                }}
+                disabled={flagging}
+                style={({ pressed }) => [
+                  styles.tertiaryButton,
+                  styles.flagModalActionButton,
+                  { flex: 1 },
+                  pressed && !flagging && styles.pressed,
+                ]}>
+                <Text style={styles.tertiaryButtonText}>Skip</Text>
+              </Pressable>
+              <Pressable
+                onPress={onSubmitFlagReason}
+                disabled={flagging}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  styles.flagModalActionButton,
+                  { flex: 3 },
+                  flagging && styles.primaryButtonDisabled,
+                  pressed && !flagging && styles.primaryButtonPressed,
+                ]}>
+                {flagging ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator color={COLOURS.text} />
+                    <Text style={styles.primaryButtonText}>Submitting…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Submit</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -762,8 +1043,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLOURS.text,
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: BODY_FONT,
+  },
+  searchInput: {
+    fontSize: 16,
   },
   multilineInput: {
     minHeight: 100,
@@ -772,6 +1056,46 @@ const styles = StyleSheet.create({
   flagSection: {
     marginTop: 20,
     width: '100%',
+  },
+  flagModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  flagModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+  },
+  flagModalTitle: {
+    color: '#f0f0f0',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: BODY_FONT,
+  },
+  flagModalSubtitle: {
+    color: '#a0a0a0',
+    fontSize: 13,
+    marginTop: 8,
+    fontFamily: BODY_FONT,
+  },
+  flagModalInput: {
+    marginTop: 12,
+    flex: 0,
+  },
+  flagModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  flagModalActionButton: {
+    flex: 1,
   },
   flagReasonInput: {
     minHeight: 60,
@@ -1050,7 +1374,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     color: '#f0f0f0',
-    fontSize: 14,
+    fontSize: 16,
     minHeight: 80,
     fontFamily: BODY_FONT,
   },
@@ -1110,6 +1434,66 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: BODY_FONT,
     textAlign: 'center',
+  },
+  flagButton: {
+    width: '100%',
+    marginTop: 0,
+    minHeight: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#9b2335',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  flagButtonText: {
+    color: '#9b2335',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: BODY_FONT,
+    textAlign: 'center',
+  },
+  carouselArrow: {
+    position: 'absolute',
+    top: '50%',
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    transform: [{ translateY: -18 }],
+    zIndex: 2,
+  },
+  carouselArrowLabel: {
+    color: '#c8a882',
+    fontSize: 24,
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  carouselDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    margin: 3,
+    backgroundColor: '#2a2a2a',
+  },
+  carouselDotActive: {
+    backgroundColor: '#c8a882',
+  },
+  carouselCardName: {
+    color: '#c8a882',
+    fontSize: 13,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginTop: 6,
+    fontFamily: BODY_FONT,
   },
   pressed: {
     opacity: 0.85,

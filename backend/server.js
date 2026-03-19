@@ -39,6 +39,7 @@ app.use(express.json());
 // Apply to /categories and /ruling endpoints only
 app.use('/categories', limiter);
 app.use('/ruling', limiter);
+app.use('/log', limiter);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -62,12 +63,44 @@ async function fetchCardOracle(cardName) {
       throw new Error(`Scryfall error for "${cardName}": ${res.statusText}`);
     }
     const data = await res.json();
+
+    let officialRulings = [];
+    try {
+      // Be polite to Scryfall: delay between requests.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const cardId = data?.id;
+      if (cardId) {
+        const rulingsRes = await fetch(
+          `https://api.scryfall.com/cards/${cardId}/rulings`
+        );
+        if (rulingsRes.ok) {
+          const rulings_data = await rulingsRes.json();
+          officialRulings = Array.isArray(rulings_data?.data)
+            ? rulings_data.data
+                .filter((r) => r?.source === "wotc")
+                .map((r) => r?.comment)
+                .filter((comment) => typeof comment === "string")
+            : [];
+        }
+      }
+    } catch (rulingsErr) {
+      // If official rulings fail, continue without them.
+      officialRulings = [];
+    }
+
     return {
       name: data.name,
       oracle_text: data.oracle_text || "",
       type_line: data.type_line || "",
       power: data.power || null,
       toughness: data.toughness || null,
+      image_uri:
+        data.image_uris?.normal ||
+        data.image_uris?.large ||
+        data.card_faces?.[0]?.image_uris?.normal ||
+        null,
+      rulings: officialRulings,
     };
   } catch (err) {
     console.error("Error fetching Scryfall oracle:", { cardName, error: err });
@@ -94,11 +127,19 @@ app.post("/categories", async (req, res) => {
     const systemPrompt =
       "You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant interaction categories a player might want to ask about. Respond ONLY with a valid JSON array of 3-5 short category label strings. No preamble, no markdown, just the raw JSON array.";
 
-    const userContent = `Here are the cards and their oracle texts:\n\n${JSON.stringify(
-      oracleData,
-      null,
-      2,
-    )}\n\nReturn only a JSON array of 3-5 short category labels.`;
+    const oracleBlock = oracleData
+      .map((c) => {
+        const rulingsBlock =
+          c.rulings && c.rulings.length > 0
+            ? "\nOfficial Rulings:\n" +
+              c.rulings.map((r) => `• ${r}`).join("\n")
+            : "";
+
+        return `${c.name}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
+      })
+      .join("\n\n");
+
+    const userContent = `Here are the cards and their oracle texts:\n\n${oracleBlock}\n\nReturn only a JSON array of 3-5 short category labels.`;
 
     const completion = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -158,11 +199,13 @@ app.post("/ruling", async (req, res) => {
 
     const oracleBlock = oracleData
       .map((c) => {
-        const stats =
-          c.power != null && c.toughness != null
-            ? ` (${c.power}/${c.toughness})`
+        const stats = c.power != null ? ` (${c.power}/${c.toughness})` : '';
+        const rulingsBlock =
+          c.rulings && c.rulings.length > 0
+            ? "\nOfficial Rulings:\n" +
+              c.rulings.map((r) => `• ${r}`).join("\n")
             : "";
-        return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}`;
+        return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
       })
       .join("\n\n");
 
@@ -309,6 +352,57 @@ ${contextSection}`;
     });
   } catch (err) {
     console.error("Error in /ruling handler:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/log", async (req, res) => {
+  const {
+    session_id,
+    case_id,
+    cards,
+    selected_category,
+    situation,
+    ruling,
+    explanation,
+    rules_cited,
+    flagged,
+    flag_reason,
+  } = req.body || {};
+
+  if (typeof session_id !== "string" || session_id.trim().length === 0) {
+    return res.status(400).json({ error: "session_id is required" });
+  }
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return res.status(400).json({ error: "cards must be a non-empty string array" });
+  }
+
+  try {
+    const otherFields = {
+      session_id,
+      cards,
+      ...(selected_category !== undefined && { selected_category }),
+      ...(situation !== undefined && { situation }),
+      ...(ruling !== undefined && { ruling }),
+      ...(explanation !== undefined && { explanation }),
+      ...(rules_cited !== undefined && { rules_cited }),
+      ...(flagged !== undefined && { flagged }),
+      ...(flag_reason !== undefined && { flag_reason }),
+    };
+
+    const { data, error } = await supabase
+      .from("cases")
+      .upsert(
+        { case_id: case_id, ...otherFields },
+        { onConflict: "case_id", ignoreDuplicates: false }
+      )
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return res.json({ success: true, id: data.id });
+  } catch (err) {
+    console.error("Error in /log handler:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
