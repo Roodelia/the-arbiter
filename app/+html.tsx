@@ -10,6 +10,17 @@ export default function Root({ children }: { children: React.ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1"
         />
+        <style>{`
+          html, body {
+            background-color: #000000 !important;
+            overscroll-behavior: none;
+            overflow: hidden;
+          }
+          #root, [data-reactroot] {
+            background-color: #000000;
+            height: 100%;
+          }
+        `}</style>
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

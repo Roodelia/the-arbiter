@@ -563,13 +563,15 @@ export default function Index() {
     setStep(2);
   }, []);
 
-  const swipeThreshold = 50;
+  const swipeThreshold = 20;
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (_, gestureState) => {
+        return true;
+      },
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        return Math.abs(gestureState.dx) > 10;
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < -swipeThreshold) {
@@ -943,6 +945,8 @@ export default function Index() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
+                      setSelectedCards([]);
+                      setCardIndex(0);
                       caseId.current = generateId();
                       goToStep1();
                     }}
