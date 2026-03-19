@@ -133,9 +133,13 @@ export default function Index() {
 
   const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const sessionId = useRef(Math.random().toString(36).substring(2)).current;
-  const generateId = () =>
-    Math.random().toString(36).substring(2) +
-    Math.random().toString(36).substring(2);
+  const generateId = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
   const caseId = useRef(generateId());
   const { width } = useWindowDimensions();
   const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
