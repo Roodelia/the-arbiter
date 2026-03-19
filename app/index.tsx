@@ -31,7 +31,7 @@ function CardName({ name }: { name: string }) {
 }
 
 const MAX_CARDS = 6;
-const BACKEND_BASE_URL = 'http://192.168.86.27:3000';
+const BACKEND_BASE_URL = 'https://the-arbiter-production.up.railway.app';
 
 const COLOURS = {
   background: '#000000',
