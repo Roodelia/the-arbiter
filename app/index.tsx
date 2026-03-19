@@ -599,7 +599,14 @@ export default function Index() {
         bounces={false}
         overScrollMode="never"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 16,
+          paddingVertical: 24,
+          maxWidth: 600,
+          width: '100%',
+          alignSelf: 'center',
+        }}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
         directionalLockEnabled={true}>
@@ -786,7 +793,7 @@ export default function Index() {
             </View>
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, { borderBottomWidth: 0 }]}>
             <Text style={styles.sectionLabel}>Step 2: Select interaction and/or describe situation</Text>
             {isCategoriesLoading ? (
               <View style={styles.loadingRow}>
@@ -836,33 +843,50 @@ export default function Index() {
           </View>
 
           <View style={styles.section}>
-            <View style={styles.buttonRow}>
-              <Pressable
+            <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#111111',
+                  borderWidth: 1,
+                  borderColor: '#1e1e1e',
+                  borderRadius: 10,
+                  height: 52,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
                 onPress={goToStep1}
-                style={({ pressed }) => [
-                  styles.tertiaryButton,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={styles.tertiaryButtonText}>Back</Text>
-              </Pressable>
-
-              <Pressable
+              >
+                <Text style={{ color: '#a0a0a0', fontSize: 15 }}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 3,
+                  backgroundColor: '#9b2335',
+                  borderRadius: 10,
+                  height: 52,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
                 onPress={requestRuling}
                 disabled={!canRequestRuling}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  (!canRequestRuling || isRulingLoading) && styles.primaryButtonDisabled,
-                  pressed && canRequestRuling && styles.primaryButtonPressed,
-                ]}>
+              >
                 {isRulingLoading ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator color={COLOURS.text} />
                     <Text style={styles.primaryButtonText}>Jury deliberating…</Text>
                   </View>
                 ) : (
-                  <Text style={styles.primaryButtonText}>Get Verdict</Text>
+                  <Text
+                    style={{
+                      color: '#f0f0f0',
+                      fontSize: 15,
+                      fontWeight: '700',
+                    }}>
+                    Get Verdict
+                  </Text>
                 )}
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -908,44 +932,7 @@ export default function Index() {
 
               <View style={styles.refineDivider} />
               <Text style={styles.refineSectionLabel}>New evidence?</Text>
-              <TextInput
-                value={refineText}
-                onChangeText={setRefineText}
-                placeholder="Describe your board state in more detail..."
-                placeholderTextColor="#3a3a3a"
-                style={styles.refineInput}
-                multiline
-                textAlignVertical="top"
-              />
               <View style={{ width: '100%', gap: 8 }}>
-                <TouchableOpacity
-                  onPress={onRefineRuling}
-                  disabled={refineText.trim().length === 0 || refining}
-                  style={[
-                    styles.secondaryButton,
-                    { width: '100%' },
-                    refineText.trim().length === 0 && !refining
-                      ? { borderColor: '#585858' }
-                      : null,
-                    (refineText.trim().length === 0 || refining) && styles.primaryButtonDisabled,
-                  ]}>
-                  {refining ? (
-                    <View style={styles.loadingRow}>
-                      <ActivityIndicator color="#9b2335" />
-                      <Text style={styles.secondaryButtonText}>Arbitering...</Text>
-                    </View>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.secondaryButtonText,
-                        refineText.trim().length === 0 && !refining
-                          ? { color: '#585858' }
-                          : null,
-                      ]}>
-                      Judge, again!!!
-                    </Text>
-                  )}
-                </TouchableOpacity>
                 {refineError ? (
                   <Text style={styles.refineErrorText}>{refineError}</Text>
                 ) : null}
@@ -953,7 +940,10 @@ export default function Index() {
                 <View style={{ flexDirection: 'row', width: '100%', gap: 8 }}>
                   <TouchableOpacity
                     onPress={goToStep2}
-                    style={[styles.tertiaryButton, { flex: 1, marginTop: 0 }]}>
+                    style={[
+                      styles.tertiaryButton,
+                      { flex: 1, marginTop: 0, height: 52, alignItems: 'center', justifyContent: 'center' },
+                    ]}>
                     <Text style={styles.tertiaryButtonText}>Back</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -963,7 +953,17 @@ export default function Index() {
                       caseId.current = generateId();
                       goToStep1();
                     }}
-                    style={[styles.primaryButton, { flex: 3, marginTop: 0, backgroundColor: COLOURS.titleAccent }]}>
+                    style={[
+                      styles.primaryButton,
+                      {
+                        flex: 3,
+                        marginTop: 0,
+                        backgroundColor: COLOURS.titleAccent,
+                        height: 52,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      },
+                    ]}>
                     <Text style={styles.primaryButtonText}>Next Case</Text>
                   </TouchableOpacity>
                 </View>
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 20,
     paddingBottom: 20,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     borderBottomColor: COLOURS.border,
   },
   sectionLabel: {
@@ -1208,8 +1208,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 12,
     justifyContent: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLOURS.border,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
   suggestionText: {
     color: COLOURS.text,
@@ -1268,7 +1268,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   primaryButton: {
-    minHeight: 44,
+    minHeight: 52,
     borderRadius: 10,
     backgroundColor: COLOURS.primaryButton,
     justifyContent: 'center',
@@ -1413,8 +1413,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   refineDivider: {
-    height: 1,
-    backgroundColor: '#1e1e1e',
+    height: 0,
+    backgroundColor: 'transparent',
     width: '100%',
     marginTop: 14,
   },
@@ -1479,15 +1479,15 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     marginTop: 12,
-    minHeight: 48,
-    borderRadius: 8,
+    minHeight: 52,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#9b2335',
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   secondaryButtonText: {
     color: '#9b2335',
@@ -1499,15 +1499,15 @@ const styles = StyleSheet.create({
   flagButton: {
     width: '100%',
     marginTop: 0,
-    minHeight: 48,
-    borderRadius: 8,
+    minHeight: 52,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#9b2335',
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
   flagButtonText: {
     color: '#9b2335',
