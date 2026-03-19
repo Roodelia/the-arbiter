@@ -17,6 +17,7 @@ app.use(cors({
   origin: [
     'http://localhost:8081',
     'https://the-arbiter-production.up.railway.app',
+    'https://the-arbiter-steel.vercel.app'
   ]
 }));
 app.use(express.json());
