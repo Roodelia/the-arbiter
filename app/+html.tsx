@@ -21,6 +21,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
             height: 100%;
           }
         `}</style>
+        <script defer src="/_vercel/insights/script.js"></script>
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>
