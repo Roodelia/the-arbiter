@@ -46,7 +46,15 @@ const MAX_CARDS = 6;
 const BACKEND_BASE_URL = 'https://the-arbiter-production.up.railway.app';
 
 const RATE_LIMIT_MESSAGE =
-  "You've reached the limit of 60 rulings per hour. Please try again later.";
+  "You've reached the limit of 60 verdicts per hour. Please try again later.";
+
+const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+const NO_CATEGORIES_MESSAGE =
+  "Couldn't load interaction categories. You can still describe your situation below and get a verdict.";
+
+const NO_RULING_MESSAGE =
+  "The Arbiter couldn't reach a verdict. Please try again or rephrase your situation.";
 
 const COLOURS = {
   background: '#000000',
@@ -352,9 +360,7 @@ export default function Index() {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       setCategories([]);
       setSelectedCategory(null);
-      setErrorMessage(
-        "Couldn't load interaction categories. Make sure the backend is running on port 3000."
-      );
+      setErrorMessage(NO_CATEGORIES_MESSAGE);
     } finally {
       setIsCategoriesLoading(false);
     }
@@ -428,9 +434,7 @@ export default function Index() {
       setStep(3);
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
-      setErrorMessage(
-        "Couldn't get a ruling. Check that the backend is running and your API keys are set."
-      );
+      setErrorMessage(NO_RULING_MESSAGE);
     } finally {
       setIsRulingLoading(false);
     }
@@ -470,7 +474,7 @@ export default function Index() {
         flag_reason: flagReason,
       });
     } catch {
-      setFlagError('Could not flag the ruling. Please try again.');
+      setFlagError(GENERIC_ERROR_MESSAGE);
     } finally {
       setFlagging(false);
     }
@@ -498,7 +502,7 @@ export default function Index() {
       setFlagModalVisible(false);
       setFlagReason('');
     } catch {
-      setFlagError('Could not submit details. Please try again.');
+      setFlagError(GENERIC_ERROR_MESSAGE);
     } finally {
       setFlagging(false);
     }
@@ -535,7 +539,7 @@ export default function Index() {
         });
       });
     } catch {
-      setRefineError('Could not refine ruling. Try again.');
+      setRefineError(NO_RULING_MESSAGE);
     } finally {
       setRefining(false);
     }

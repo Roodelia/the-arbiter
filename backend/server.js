@@ -60,9 +60,33 @@ into another.
 PASS 5 — STATE THE RULING:
 Only after completing all passes, state the final ruling.
 
+CRITICAL: Your response MUST start with "RULING:" on the 
+very first line. No preamble, no pass labels before the ruling.
+
 Format your response EXACTLY as:
+
 RULING: [Clear one or two sentence ruling with final numbers]
-EXPLANATION: [Your multi-pass analysis showing all interactions]
+EXPLANATION:
+PASS 1 — RELEVANT ABILITIES:
+[List every triggered ability, static ability and replacement 
+effect on each card that could interact with the others]
+
+PASS 2 — INTERACTION POINTS:
+[For each ability, identify what modifies when it triggers,
+how many times it triggers, what it produces, and what 
+the results produce. Work through every combination.]
+
+PASS 3 — LAYER ORDER RESOLUTION:
+[Apply effects in correct game order: static abilities first,
+then replacement effects, then triggered abilities in APNAP 
+order. For each trigger check if doubling effects apply.
+For tokens created, re-check all triggers.]
+
+PASS 4 — CALCULATIONS:
+[Show explicit maths for any numerical results:
+"X triggers × Y doublers = Z total"
+Account for recursive interactions.]
+
 RULES CITED: [Rule numbers and descriptions, one per line]
 CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
 
@@ -72,6 +96,9 @@ Critical rules:
 - Show explicit calculations for any numerical results
 - Only cite rule numbers from the provided context
 - If genuinely uncertain, say so explicitly rather than guessing`;
+
+const GENERIC_SERVER_ERROR_MESSAGE =
+  "Something went wrong. Please try again.";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -218,15 +245,13 @@ app.post("/categories", async (req, res) => {
         rawText,
         error: parseErr,
       });
-      return res
-        .status(500)
-        .json({ error: "Failed to parse categories from AI response" });
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
     return res.json({ categories });
   } catch (err) {
     console.error("Error in /categories handler:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
 
@@ -277,9 +302,7 @@ app.post("/ruling", async (req, res) => {
 
     if (!embedding) {
       console.error("Voyage embedding missing or malformed:", embedResponse);
-      return res
-        .status(500)
-        .json({ error: "Failed to generate query embedding" });
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
     const { data: matches, error: supabaseError } = await supabase.rpc(
@@ -292,9 +315,7 @@ app.post("/ruling", async (req, res) => {
 
     if (supabaseError) {
       console.error("Supabase match_rules error:", supabaseError);
-      return res
-        .status(500)
-        .json({ error: "Failed to query rules from Supabase" });
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
     const crChunks =
@@ -385,9 +406,7 @@ ${contextSection}`;
 
     if (!ruling || !explanation) {
       console.error("Unexpected AI response format:", rawText);
-      return res
-        .status(500)
-        .json({ error: "Failed to parse ruling from AI response" });
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
     return res.json({
@@ -398,7 +417,7 @@ ${contextSection}`;
     });
   } catch (err) {
     console.error("Error in /ruling handler:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
 
@@ -449,7 +468,7 @@ app.post("/log", async (req, res) => {
     return res.json({ success: true, id: data.id });
   } catch (err) {
     console.error("Error in /log handler:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
 
@@ -483,7 +502,7 @@ app.post("/flag", async (req, res) => {
     return res.json({ success: true, id });
   } catch (err) {
     console.error("Error in /flag handler:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
 
