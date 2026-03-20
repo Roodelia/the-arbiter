@@ -912,7 +912,20 @@ export default function Index() {
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
                 EXPLANATION
               </Text>
-              <Text style={styles.explanationText}>{rulingResult.explanation}</Text>
+              <View style={styles.explanationList}>
+                {rulingResult.explanation
+                  .split(/\n+/)
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <View key={i} style={styles.explanationListRow}>
+                      <Text style={styles.explanationBullet} accessible={false}>
+                        {'\u2022'}
+                      </Text>
+                      <Text style={styles.explanationListItem}>{line}</Text>
+                    </View>
+                  ))}
+              </View>
 
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
                 RULES CITED
@@ -1382,8 +1395,24 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontFamily: BODY_FONT,
   },
-  explanationText: {
+  explanationList: {
     marginTop: 6,
+    gap: 10,
+  },
+  explanationListRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  explanationBullet: {
+    color: COLOURS.textMuted,
+    fontSize: 14,
+    lineHeight: 24,
+    fontFamily: BODY_FONT,
+    marginTop: 0,
+  },
+  explanationListItem: {
+    flex: 1,
     color: COLOURS.text,
     fontSize: 14,
     lineHeight: 24,

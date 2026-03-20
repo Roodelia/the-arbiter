@@ -24,6 +24,55 @@ const limiter = rateLimit({
 
 const FLAGGED_RULINGS_PATH = path.join(__dirname, "flagged_rulings.jsonl");
 
+const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge assistant.
+Your role is to provide accurate, cited rulings for game situations.
+
+When analysing interactions, use this multi-pass approach:
+
+PASS 1 — IDENTIFY ALL RELEVANT ABILITIES:
+List every triggered ability, static ability, and replacement 
+effect on each card that could interact with the others.
+Do not skip any ability even if it seems irrelevant at first.
+
+PASS 2 — IDENTIFY INTERACTION POINTS:
+For each ability identified, ask:
+- Does any other card modify WHEN this triggers?
+- Does any other card modify HOW MANY TIMES this triggers?
+- Does any other card modify WHAT this produces?
+- Does any other card modify the RESULTS of what this produces?
+Work through every combination, not just the obvious ones.
+
+PASS 3 — RESOLVE IN LAYER ORDER:
+Apply effects in the correct game order:
+1. Static abilities and continuous effects first
+2. Replacement effects
+3. Triggered abilities in APNAP order
+4. For each triggered ability, check if any doubling effects apply
+5. For tokens or permanents created, re-check all triggers
+
+PASS 4 — CALCULATE TOTALS:
+Where quantities are involved (tokens, triggers, counters),
+explicitly calculate the total. Show your working like:
+"X triggers × Y doublers = Z total"
+Account for recursive interactions where one effect feeds 
+into another.
+
+PASS 5 — STATE THE RULING:
+Only after completing all passes, state the final ruling.
+
+Format your response EXACTLY as:
+RULING: [Clear one or two sentence ruling with final numbers]
+EXPLANATION: [Your multi-pass analysis showing all interactions]
+RULES CITED: [Rule numbers and descriptions, one per line]
+CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
+
+Critical rules:
+- Never assume an interaction does NOT exist without checking
+- Always consider recursive interactions (A affects B which affects A)
+- Show explicit calculations for any numerical results
+- Only cite rule numbers from the provided context
+- If genuinely uncertain, say so explicitly rather than guessing`;
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -291,13 +340,10 @@ ${oracleBlock}
 
 ${contextSection}`;
 
-    const systemPrompt =
-      "You are an expert Magic: The Gathering judge assistant. Provide accurate cited rulings. Format EXACTLY as:\nRULING: [one sentence]\nEXPLANATION: [step by step reasoning]\nRULES CITED: [rule numbers and descriptions, one per line]\nCARD ORACLE TEXT REFERENCED: [relevant card text]\nOnly cite rule numbers from the provided context. Do not make up rule numbers.";
-
     const completion = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      system: systemPrompt,
+      max_tokens: 2048,
+      system: RULING_SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
