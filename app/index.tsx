@@ -916,20 +916,44 @@ export default function Index() {
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
                 EXPLANATION
               </Text>
-              <View style={styles.explanationList}>
-                {rulingResult.explanation
-                  .split(/\n+/)
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-                  .map((line, i) => (
-                    <View key={i} style={styles.explanationListRow}>
-                      <Text style={styles.explanationBullet} accessible={false}>
-                        {'\u2022'}
+              {(() => {
+                const explanationLines = rulingResult.explanation
+                  .split('\n')
+                  .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
+                  .filter(Boolean);
+
+                return explanationLines.map((line, index) => (
+                  line.match(/^\d+\./) ? (
+                    <View
+                      key={index}
+                      style={{
+                        flexDirection: 'row',
+                        marginBottom: 6,
+                        paddingRight: 8,
+                      }}>
+                      <Text
+                        style={[
+                          styles.explanationText,
+                          {
+                            minWidth: 24,
+                            flexShrink: 0,
+                          },
+                        ]}>
+                        {line.match(/^\d+\./) ? line.match(/^\d+\./)[0] : ''}
                       </Text>
-                      <Text style={styles.explanationListItem}>{line}</Text>
+                      <Text style={[styles.explanationText, { flex: 1 }]}>
+                        {line.match(/^\d+\./)
+                          ? line.replace(/^\d+\.\s*/, '')
+                          : line}
+                      </Text>
                     </View>
-                  ))}
-              </View>
+                  ) : (
+                    <Text key={index} style={styles.explanationText}>
+                      {line}
+                    </Text>
+                  )
+                ));
+              })()}
 
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
                 RULES CITED
@@ -1399,28 +1423,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontFamily: BODY_FONT,
   },
-  explanationList: {
-    marginTop: 6,
-    gap: 10,
-  },
-  explanationListRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  explanationBullet: {
-    color: COLOURS.textMuted,
+  explanationText: {
+    color: '#f0f0f0',
     fontSize: 14,
-    lineHeight: 24,
-    fontFamily: BODY_FONT,
-    marginTop: 0,
-  },
-  explanationListItem: {
-    flex: 1,
-    color: COLOURS.text,
-    fontSize: 14,
-    lineHeight: 24,
-    fontFamily: BODY_FONT,
+    lineHeight: 22,
+    marginBottom: 6,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   rulesRow: {
     marginTop: 10,
