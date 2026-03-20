@@ -922,8 +922,9 @@ export default function Index() {
                   .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
                   .filter(Boolean);
 
-                return explanationLines.map((line, index) => (
-                  line.match(/^\d+\./) ? (
+                return explanationLines.map((line, index) => {
+                  const match = line.match(/^\d+\./);
+                  return match ? (
                     <View
                       key={index}
                       style={{
@@ -939,20 +940,18 @@ export default function Index() {
                             flexShrink: 0,
                           },
                         ]}>
-                        {line.match(/^\d+\./) ? line.match(/^\d+\./)[0] : ''}
+                        {match[0]}
                       </Text>
                       <Text style={[styles.explanationText, { flex: 1 }]}>
-                        {line.match(/^\d+\./)
-                          ? line.replace(/^\d+\.\s*/, '')
-                          : line}
+                        {line.replace(/^\d+\.\s*/, '')}
                       </Text>
                     </View>
                   ) : (
                     <Text key={index} style={styles.explanationText}>
                       {line}
                     </Text>
-                  )
-                ));
+                  );
+                });
               })()}
 
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
