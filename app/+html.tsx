@@ -10,6 +10,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1"
         />
+        <title>Arbiter</title>
         <style>{`
           html, body {
             background-color: #000000 !important;
