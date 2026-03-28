@@ -1049,7 +1049,7 @@ export default function Index() {
               onLayout={(e) => {
                 rulingCardScrollYRef.current = e.nativeEvent.layout.y;
               }}>
-              <Text style={styles.stepLabel}>Step 3: View ruling</Text>
+              <Text style={styles.stepLabel}>Step 3: Receive Verdict</Text>
 
               <Text style={styles.sectionLabel}>Selected cards</Text>
               <View style={[styles.chipsRow, { marginBottom: 12 }]}>
@@ -1142,13 +1142,19 @@ export default function Index() {
                       {
                         flex: 3,
                         marginTop: 0,
-                        backgroundColor: COLOURS.titleAccent,
+                        backgroundColor: COLOURS.chipSelected,
                         height: 52,
                         alignItems: 'center',
                         justifyContent: 'center',
                       },
                     ]}>
-                    <Text style={styles.primaryButtonText}>Next Case</Text>
+                    <Text
+                      style={[
+                        styles.primaryButtonText,
+                        { color: COLOURS.chipUnselected },
+                      ]}>
+                      Present Another Case
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
