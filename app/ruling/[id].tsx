@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -91,6 +93,12 @@ export default function SharedRulingScreen() {
         : '';
 
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  /** Same width rule as Step 1 carousel in app/index.tsx */
+  const cardPreviewWidth =
+    Platform.OS === 'web'
+      ? Math.min(windowWidth - 32, 400)
+      : windowWidth - 32;
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -194,6 +202,12 @@ export default function SharedRulingScreen() {
   const cardNames = ruling ? normalizeCardNames(ruling.cards) : [];
   const rulesCited = ruling ? normalizeRulesCited(ruling.rules_cited) : [];
 
+  const modalCardName = activeCardPopup;
+  const modalCachedUri = modalCardName ? imageUriCache[modalCardName] : undefined;
+  const modalShowLoading =
+    !!modalCardName &&
+    !Object.prototype.hasOwnProperty.call(imageUriCache, modalCardName);
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -232,74 +246,22 @@ export default function SharedRulingScreen() {
 
               {cardNames.length > 0 ? (
                 <View style={styles.chipsRow}>
-                  {cardNames.map((name, i) => {
-                    const isOpen = activeCardPopup === name;
-                    const cachedUri = imageUriCache[name];
-                    const showLoading =
-                      isOpen &&
-                      !Object.prototype.hasOwnProperty.call(
-                        imageUriCache,
-                        name
-                      );
-
-                    const webPointerHandlers =
-                      Platform.OS === 'web'
-                        ? {
-                            onPointerEnter: () => setActiveCardPopup(name),
-                            onPointerLeave: () => setActiveCardPopup(null),
-                          }
-                        : {};
-
-                    return (
-                      <View
-                        key={`${name}-${i}`}
-                        style={styles.chipPopupHost}
-                        {...webPointerHandlers}>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Show card image for ${name}`}
-                          onPress={
-                            Platform.OS === 'web'
-                              ? undefined
-                              : () =>
-                                  setActiveCardPopup((prev) =>
-                                    prev === name ? null : name
-                                  )
-                          }
-                          style={({ pressed }) => [
-                            styles.readOnlyChip,
-                            Platform.OS !== 'web' && pressed && styles.chipPressed,
-                            Platform.OS === 'web' && styles.readOnlyChipWeb,
-                          ]}>
-                          <Text style={styles.chipText} numberOfLines={1}>
-                            {name}
-                          </Text>
-                        </Pressable>
-                        {isOpen ? (
-                          <View style={styles.cardImagePopup}>
-                            {showLoading ? (
-                              <View style={styles.cardPopupSpinnerWrap}>
-                                <ActivityIndicator
-                                  color={COLOURS.titleAccent}
-                                  size="small"
-                                />
-                              </View>
-                            ) : cachedUri ? (
-                              <Image
-                                source={{ uri: cachedUri }}
-                                style={styles.cardPopupImage}
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Text style={styles.cardPopupFallback}>
-                                No image found
-                              </Text>
-                            )}
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  })}
+                  {cardNames.map((name, i) => (
+                    <Pressable
+                      key={`${name}-${i}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Show card image for ${name}`}
+                      onPress={() => setActiveCardPopup(name)}
+                      style={({ pressed }) => [
+                        styles.readOnlyChip,
+                        pressed && styles.chipPressed,
+                        Platform.OS === 'web' && styles.readOnlyChipWeb,
+                      ]}>
+                      <Text style={styles.chipText} numberOfLines={1}>
+                        {name}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               ) : null}
 
@@ -384,6 +346,46 @@ export default function SharedRulingScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={modalCardName !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveCardPopup(null)}>
+        <View style={styles.cardImageModalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss card image"
+            style={styles.cardImageModalBackdrop}
+            onPress={() => setActiveCardPopup(null)}
+          />
+          <View
+            style={styles.cardImageModalCenterLayer}
+            pointerEvents="box-none">
+            <View
+              style={[styles.cardModalImageFrame, { width: cardPreviewWidth }]}>
+              {modalShowLoading ? (
+                <View style={styles.cardModalSpinnerWrap}>
+                  <ActivityIndicator
+                    color={COLOURS.titleAccent}
+                    size="large"
+                  />
+                </View>
+              ) : modalCachedUri ? (
+                <Image
+                  source={{ uri: modalCachedUri }}
+                  style={styles.cardModalImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.cardModalSpinnerWrap}>
+                  <Text style={styles.cardPopupFallback}>No image found</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -429,43 +431,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  chipPopupHost: {
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-  },
   chipPressed: {
     opacity: 0.85,
   },
-  /** In-flow below chip so web hover stays active over image (hit box includes popup). */
-  cardImagePopup: {
-    marginTop: 8,
-    width: 220,
-    maxWidth: '100%',
-    padding: 10,
-    backgroundColor: '#111111',
-    borderWidth: 1,
-    borderColor: '#1e1e1e',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 12,
+  cardImageModalRoot: {
+    flex: 1,
   },
-  cardPopupSpinnerWrap: {
-    minHeight: 140,
+  cardImageModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+  },
+  cardImageModalCenterLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardModalImageFrame: {
+    aspectRatio: 63 / 88,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: COLOURS.background,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+  },
+  cardModalSpinnerWrap: {
+    flex: 1,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 24,
   },
-  cardPopupImage: {
+  cardModalImage: {
     width: '100%',
-    aspectRatio: 63 / 88,
-    borderRadius: 8,
-    backgroundColor: COLOURS.background,
+    height: '100%',
   },
   cardPopupFallback: {
     color: COLOURS.textMuted,
@@ -503,9 +501,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   readOnlyChip: {
-    minHeight: 40,
+    alignSelf: 'flex-start',
+    minHeight: 30,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#c8a882',
@@ -523,9 +522,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   categoryChip: {
-    minHeight: 40,
+    minHeight: 30,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#2a2a2a',

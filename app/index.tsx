@@ -30,8 +30,18 @@ type CategoriesResponse = {
 type ShareRulingResponse = {
   success?: boolean;
   id?: string;
-  url?: string;
 };
+
+/** Production web app origin when building share links on iOS/Android. */
+const SHARE_APP_ORIGIN_NATIVE = 'https://the-arbiter-steel.vercel.app';
+
+function buildShareRulingUrl(shareId: string): string {
+  const origin =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : SHARE_APP_ORIGIN_NATIVE;
+  return `${origin}/ruling/${shareId}`;
+}
 
 async function copyShareUrlToClipboard(url: string): Promise<void> {
   try {
@@ -69,7 +79,7 @@ const MAX_CARDS = 6;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
 
 const RATE_LIMIT_MESSAGE =
-  "You've reached the limit of 60 verdicts per hour. Please try again later.";
+  "You've reached the limit of 120 verdicts per hour. Please try again later.";
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
@@ -137,6 +147,10 @@ function uniqCaseInsensitive(items: string[]): string[] {
   return out;
 }
 
+function selectedCategoriesPayload(categories: string[]): string | undefined {
+  return categories.length > 0 ? categories.join(', ') : undefined;
+}
+
 export default function Index() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [query, setQuery] = useState('');
@@ -144,7 +158,7 @@ export default function Index() {
   const [selectedCards, setSelectedCards] = useState<SelectedCard[]>([]);
 
   const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
 
   const [situation, setSituation] = useState('');
@@ -364,7 +378,11 @@ export default function Index() {
   }, []);
 
   const toggleCategory = useCallback((category: string) => {
-    setSelectedCategory((prev) => (prev === category ? null : category));
+    setSelectedCategory((prev) =>
+      prev.includes(category)
+        ? prev.filter((c) => c !== category)
+        : [...prev, category]
+    );
     setRulingResult(null);
     setStep((prev) => (prev === 3 ? 2 : prev));
   }, []);
@@ -385,7 +403,7 @@ export default function Index() {
 
       if (res.status === 429) {
         setCategories([]);
-        setSelectedCategory(null);
+        setSelectedCategory([]);
         setErrorMessage(RATE_LIMIT_MESSAGE);
         return;
       }
@@ -393,11 +411,11 @@ export default function Index() {
       const json = (await res.json()) as CategoriesResponse;
       const next = Array.isArray(json.categories) ? json.categories : [];
       setCategories(next);
-      setSelectedCategory((prev) => (prev && next.includes(prev) ? prev : null));
+      setSelectedCategory((prev) => prev.filter((c) => next.includes(c)));
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       setCategories([]);
-      setSelectedCategory(null);
+      setSelectedCategory([]);
       setErrorMessage(NO_CATEGORIES_MESSAGE);
     } finally {
       setIsCategoriesLoading(false);
@@ -409,7 +427,7 @@ export default function Index() {
       categoriesAbortRef.current?.abort();
       if (step < 2) {
         setCategories([]);
-        setSelectedCategory(null);
+        setSelectedCategory([]);
       }
       return;
     }
@@ -427,9 +445,10 @@ export default function Index() {
     setErrorMessage(null);
     setRulingResult(null);
 
+    const categoryPayload = selectedCategoriesPayload(selectedCategory);
     void logCase({
       cards: selectedCards.map((c) => c.name),
-      selected_category: selectedCategory ?? undefined,
+      selected_category: categoryPayload,
       situation: situation.trim() || undefined,
     });
 
@@ -442,7 +461,7 @@ export default function Index() {
     const payload: { cards: string[]; situation?: string; category?: string } = {
       cards: selectedCards.map((c) => c.name),
     };
-      if (selectedCategory) payload.category = selectedCategory;
+      if (categoryPayload) payload.category = categoryPayload;
       if (situation.trim()) payload.situation = situation.trim();
 
       const res = await fetch(`${BACKEND_BASE_URL}/ruling`, {
@@ -461,7 +480,7 @@ export default function Index() {
 
       void logCase({
         cards: selectedCards.map((c) => c.name),
-        selected_category: selectedCategory ?? undefined,
+        selected_category: categoryPayload,
         situation: situation.trim() || undefined,
         ruling: json.ruling,
         explanation: json.explanation,
@@ -498,13 +517,14 @@ export default function Index() {
     setShareError(null);
     setSharing(true);
     try {
+      const categoryPayload = selectedCategoriesPayload(selectedCategory);
       const res = await fetch(`${BACKEND_BASE_URL}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: caseId.current,
           cards: selectedCards.map((c) => c.name),
-          ...(selectedCategory != null ? { category: selectedCategory } : {}),
+          ...(categoryPayload ? { category: categoryPayload } : {}),
           ...(situation.trim() ? { situation: situation.trim() } : {}),
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,
@@ -517,8 +537,8 @@ export default function Index() {
       }
       if (!res.ok) throw new Error('Share failed');
       const json = (await res.json()) as ShareRulingResponse;
-      if (!json.url || typeof json.url !== 'string') throw new Error('Share failed');
-      await copyShareUrlToClipboard(json.url);
+      if (!json.id || typeof json.id !== 'string') throw new Error('Share failed');
+      await copyShareUrlToClipboard(buildShareRulingUrl(json.id));
       setShareCopied(true);
       shareCopiedTimerRef.current = setTimeout(() => {
         setShareCopied(false);
@@ -542,12 +562,13 @@ export default function Index() {
     setFlagError(null);
     setFlagging(true);
     try {
+      const categoryPayload = selectedCategoriesPayload(selectedCategory);
       const res = await fetch(`${BACKEND_BASE_URL}/flag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cards: selectedCards.map((c) => c.name),
-          category: selectedCategory ?? undefined,
+          category: categoryPayload,
           situation: situation.trim() || undefined,
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,
@@ -560,7 +581,7 @@ export default function Index() {
       setFlagModalVisible(true);
       void logCase({
         cards: selectedCards.map((c) => c.name),
-        selected_category: selectedCategory ?? undefined,
+        selected_category: categoryPayload,
         situation: situation.trim() || undefined,
         ruling: rulingResult.ruling,
         flagged: true,
@@ -578,12 +599,13 @@ export default function Index() {
     setFlagError(null);
     setFlagging(true);
     try {
+      const categoryPayload = selectedCategoriesPayload(selectedCategory);
       const res = await fetch(`${BACKEND_BASE_URL}/flag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cards: selectedCards.map((c) => c.name),
-          category: selectedCategory ?? undefined,
+          category: categoryPayload,
           situation: situation.trim() || undefined,
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,
@@ -595,7 +617,7 @@ export default function Index() {
       const trimmedReason = flagReasonRef.current.trim();
       void logCase({
         cards: selectedCards.map((c) => c.name),
-        selected_category: selectedCategory ?? undefined,
+        selected_category: categoryPayload,
         situation: situation.trim() || undefined,
         ruling: rulingResult.ruling,
         explanation: rulingResult.explanation,
@@ -619,12 +641,13 @@ export default function Index() {
     setRefineError('');
     setRefining(true);
     try {
+      const categoryPayload = selectedCategoriesPayload(selectedCategory);
       const res = await fetch(`${BACKEND_BASE_URL}/ruling`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cards: selectedCards.map((c) => c.name),
-          category: selectedCategory ?? undefined,
+          ...(categoryPayload ? { category: categoryPayload } : {}),
           situation: detail,
         }),
       });
@@ -665,7 +688,7 @@ export default function Index() {
     setShareError(null);
     setErrorMessage(null);
     setRulingResult(null);
-    setSelectedCategory(null);
+    setSelectedCategory([]);
     setSituation('');
     setFlagged(false);
     setFlagModalVisible(false);
@@ -742,7 +765,7 @@ export default function Index() {
       {step === 1 ? (
         <>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Step 1: Specify cards</Text>
+            <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
             <View style={styles.searchRow}>
               <TextInput
                 value={query}
@@ -916,7 +939,7 @@ export default function Index() {
           </View>
 
           <View style={[styles.section, { borderBottomWidth: 0 }]}>
-            <Text style={styles.sectionLabel}>Step 2: Select interaction and/or describe situation</Text>
+            <Text style={styles.stepLabel}>Step 2: Select interaction and/or describe situation</Text>
             {isCategoriesLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={COLOURS.chipSelected} />
@@ -926,7 +949,7 @@ export default function Index() {
 
             <View style={styles.chipsRow}>
               {categories.map((cat) => {
-                const selected = cat === selectedCategory;
+                const selected = selectedCategory.includes(cat);
                 return (
                   <Pressable
                     key={cat}
@@ -1026,12 +1049,23 @@ export default function Index() {
               onLayout={(e) => {
                 rulingCardScrollYRef.current = e.nativeEvent.layout.y;
               }}>
-              <Text style={styles.sectionLabel}>Step 3: View ruling</Text>
+              <Text style={styles.stepLabel}>Step 3: View ruling</Text>
 
-              <Text style={styles.resultHeading}>RULING</Text>
+              <Text style={styles.sectionLabel}>Selected cards</Text>
+              <View style={[styles.chipsRow, { marginBottom: 12 }]}>
+                {selectedCards.map((card) => (
+                  <View key={card.name} style={styles.chip}>
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      <CardName name={card.name} />
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.sectionLabel}>RULING</Text>
               <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
 
-              <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
+              <Text style={[styles.sectionLabel, styles.sectionLabelSpacer]}>
                 EXPLANATION
               </Text>
               {(() => {
@@ -1064,7 +1098,7 @@ export default function Index() {
                 ));
               })()}
 
-              <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
+              <Text style={[styles.sectionLabel, styles.sectionLabelSpacer]}>
                 RULES CITED
               </Text>
               <View style={styles.rulesRow}>
@@ -1254,14 +1288,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderBottomColor: COLOURS.border,
   },
-  sectionLabel: {
+  stepLabel: {
     color: '#585858',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '900',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 3,
     fontFamily: BODY_FONT,
+  },
+  sectionLabel: {
+    color: '#585858',
+    fontWeight: '600',
+    letterSpacing: 3,
+    fontSize: 10,
+    fontFamily: BODY_FONT,
+    textTransform: 'uppercase',
   },
   searchRow: {
     flexDirection: 'row',
@@ -1537,15 +1579,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLOURS.border,
   },
-  resultHeading: {
-    color: '#585858',
-    fontWeight: '900',
-    letterSpacing: 3,
-    fontSize: 10,
-    fontFamily: BODY_FONT,
-    textTransform: 'uppercase',
-  },
-  resultHeadingSpacer: {
+  sectionLabelSpacer: {
     marginTop: 14,
   },
   rulingText: {

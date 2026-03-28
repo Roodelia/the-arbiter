@@ -143,7 +143,7 @@ Images are never stored — only card names.
 - **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, created_at
 
 ## Rate Limiting
-- 60 requests per hour per IP address
+- 120 requests per hour per IP address
 - Applies to /categories, /ruling, /log, and /share endpoints
 - 429 response shows friendly message in UI
 
