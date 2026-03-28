@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
@@ -107,6 +108,18 @@ Critical rules:
 const GENERIC_SERVER_ERROR_MESSAGE =
   "Something went wrong. Please try again.";
 
+const SHARE_APP_BASE = "https://the-arbiter-steel.vercel.app";
+
+function generateShareId() {
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < 8; i++) {
+    out += alphabet[crypto.randomInt(alphabet.length)];
+  }
+  return out;
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -124,6 +137,7 @@ app.use(express.json());
 app.use('/categories', limiter);
 app.use('/ruling', limiter);
 app.use('/log', limiter);
+app.use('/share', limiter);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -516,6 +530,134 @@ app.post("/flag", async (req, res) => {
     return res.json({ success: true, id });
   } catch (err) {
     console.error("Error in /flag handler:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
+app.post("/share", async (req, res) => {
+  const {
+    case_id,
+    cards,
+    category,
+    situation,
+    ruling,
+    explanation,
+    rules_cited,
+  } = req.body || {};
+
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "cards must be a non-empty string array" });
+  }
+  if (!ruling || typeof ruling !== "string" || !ruling.trim()) {
+    return res
+      .status(400)
+      .json({ error: "ruling must be a non-empty string" });
+  }
+  if (
+    case_id !== undefined &&
+    case_id !== null &&
+    typeof case_id !== "string"
+  ) {
+    return res.status(400).json({ error: "case_id must be a string" });
+  }
+  if (category !== undefined && category !== null && typeof category !== "string") {
+    return res.status(400).json({ error: "category must be a string" });
+  }
+  if (
+    situation !== undefined &&
+    situation !== null &&
+    typeof situation !== "string"
+  ) {
+    return res.status(400).json({ error: "situation must be a string" });
+  }
+  if (
+    explanation !== undefined &&
+    explanation !== null &&
+    typeof explanation !== "string"
+  ) {
+    return res.status(400).json({ error: "explanation must be a string" });
+  }
+  if (
+    rules_cited !== undefined &&
+    rules_cited !== null &&
+    !Array.isArray(rules_cited)
+  ) {
+    return res.status(400).json({ error: "rules_cited must be an array" });
+  }
+
+  try {
+    const explanationStr =
+      typeof explanation === "string" ? explanation : "";
+    const rulesList = Array.isArray(rules_cited) ? rules_cited : [];
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const shareId = generateShareId();
+      const row = {
+        id: shareId,
+        case_id:
+          typeof case_id === "string" && case_id.trim().length > 0
+            ? case_id.trim()
+            : null,
+        cards,
+        category:
+          typeof category === "string" && category.length > 0 ? category : null,
+        situation:
+          typeof situation === "string" && situation.length > 0
+            ? situation
+            : null,
+        ruling: ruling.trim(),
+        explanation: explanationStr,
+        rules_cited: rulesList,
+      };
+
+      const { error } = await supabase.from("shared_rulings").insert(row);
+
+      if (!error) {
+        return res.json({
+          success: true,
+          id: shareId,
+          url: `${SHARE_APP_BASE}/ruling/${shareId}`,
+        });
+      }
+
+      if (error.code !== "23505") {
+        console.error("Error inserting shared_ruling:", error);
+        return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+      }
+    }
+
+    console.error("Could not allocate unique share id after retries");
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  } catch (err) {
+    console.error("Error in /share handler:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
+app.get("/share/:id", async (req, res) => {
+  const id = req.params.id;
+
+  if (typeof id !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(id)) {
+    return res.status(404).json({ error: "Ruling not found" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("shared_rulings")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ error: "Ruling not found" });
+    }
+
+    return res.json(data);
+  } catch (err) {
+    console.error("Error in GET /share/:id:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });

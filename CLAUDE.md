@@ -61,6 +61,17 @@ POST /log
   - Upserts case record to Supabase cases table by case_id
   - Returns: { success: true }
 
+POST /share
+  - Input: { case_id, cards, category?, situation?, ruling, explanation, rules_cited }
+  - Generates short 8-char alphanumeric ID
+  - Inserts into Supabase shared_rulings table
+  - Returns: { success: true, id, url }
+
+GET /share/:id
+  - Looks up shared ruling by ID from shared_rulings table
+  - Returns: { id, cards, category, situation, ruling, explanation, rules_cited, created_at }
+  - 404 if not found
+
 ## Scryfall Integration
 - Two calls per card: /cards/named?fuzzy= (oracle text) + /cards/{id}/rulings
 - 100ms delay between requests to respect rate limits (max 10 req/sec)
@@ -102,6 +113,7 @@ Step 2 — Select Context
 Step 3 — View Verdict
   - Ruling card: RULING in pistachio green, EXPLANATION, RULES CITED tags
   - "Back" (flex:1) + "Next Case" (flex:3) buttons
+  - "Share this ruling" button (cinnamon buff border, copies link to clipboard)
   - "Appeal this ruling" flag button (etruscan red border, no fill)
   - Flag flow: immediate log on tap → modal for optional reason → confirm
 
@@ -111,6 +123,7 @@ Step 3 — View Verdict
 - Step 2 confirm: "Get Verdict"
 - Step 3 back: "Back"
 - Step 3 reset: "Next Case"
+- Step 3 share: "Share this ruling"
 - Step 3 flag: "Appeal this ruling"
 
 ## Usage Logging (Supabase cases table)
@@ -125,9 +138,13 @@ sessions appear as one row with null fields for incomplete steps.
 session_id groups multiple cases from the same app session.
 Images are never stored — only card names.
 
+## Database (Supabase)
+- **cases** — usage logging (see Usage Logging above)
+- **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, created_at
+
 ## Rate Limiting
 - 60 requests per hour per IP address
-- Applies to /categories, /ruling, and /log endpoints
+- Applies to /categories, /ruling, /log, and /share endpoints
 - 429 response shows friendly message in UI
 
 ## Colour Palette
@@ -172,6 +189,7 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 
 ## Key Files
 - app/index.tsx — main app screen (all three steps)
+- app/ruling/[id].tsx — shared ruling public page
 - app/+html.tsx — web HTML wrapper (viewport, overscroll, analytics)
 - app/_layout.tsx — Expo Router layout (headerShown: false)
 - backend/server.js — Express backend (all API endpoints)

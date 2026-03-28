@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import * as Clipboard from 'expo-clipboard';
 
 type ScryfallAutocompleteResponse = {
   data: string[];
@@ -25,6 +26,28 @@ type ScryfallAutocompleteResponse = {
 type CategoriesResponse = {
   categories: string[];
 };
+
+type ShareRulingResponse = {
+  success?: boolean;
+  id?: string;
+  url?: string;
+};
+
+async function copyShareUrlToClipboard(url: string): Promise<void> {
+  try {
+    await Clipboard.setStringAsync(url);
+  } catch {
+    if (
+      Platform.OS === 'web' &&
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard?.writeText
+    ) {
+      await navigator.clipboard.writeText(url);
+      return;
+    }
+    throw new Error('Clipboard unavailable');
+  }
+}
 
 type RulingResponse = {
   ruling: string;
@@ -136,6 +159,11 @@ export default function Index() {
   const [flagging, setFlagging] = useState(false);
   const [flagError, setFlagError] = useState<string | null>(null);
 
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [refineText, setRefineText] = useState('');
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState('');
@@ -176,6 +204,14 @@ export default function Index() {
     () => selectedCards.map((c) => c.name).join('|'),
     [selectedCards]
   );
+
+  useEffect(() => {
+    return () => {
+      if (shareCopiedTimerRef.current) {
+        clearTimeout(shareCopiedTimerRef.current);
+      }
+    };
+  }, []);
 
   const prevSelectedCardsLengthRef = useRef(selectedCards.length);
   useEffect(() => {
@@ -432,6 +468,12 @@ export default function Index() {
         rules_cited: json.rules_cited,
       });
 
+      if (shareCopiedTimerRef.current) {
+        clearTimeout(shareCopiedTimerRef.current);
+        shareCopiedTimerRef.current = null;
+      }
+      setShareCopied(false);
+      setShareError(null);
       setRulingResult(json);
       setStep(3);
     } catch (err) {
@@ -445,6 +487,55 @@ export default function Index() {
   const onPressRuleTag = useCallback((ruleLine: string) => {
     Alert.alert('Rule cited', ruleLine);
   }, []);
+
+  const onShareRuling = useCallback(async () => {
+    if (!rulingResult || sharing) return;
+    if (shareCopiedTimerRef.current) {
+      clearTimeout(shareCopiedTimerRef.current);
+      shareCopiedTimerRef.current = null;
+    }
+    setShareCopied(false);
+    setShareError(null);
+    setSharing(true);
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: caseId.current,
+          cards: selectedCards.map((c) => c.name),
+          ...(selectedCategory != null ? { category: selectedCategory } : {}),
+          ...(situation.trim() ? { situation: situation.trim() } : {}),
+          ruling: rulingResult.ruling,
+          explanation: rulingResult.explanation,
+          rules_cited: rulingResult.rules_cited ?? [],
+        }),
+      });
+      if (res.status === 429) {
+        setShareError(RATE_LIMIT_MESSAGE);
+        return;
+      }
+      if (!res.ok) throw new Error('Share failed');
+      const json = (await res.json()) as ShareRulingResponse;
+      if (!json.url || typeof json.url !== 'string') throw new Error('Share failed');
+      await copyShareUrlToClipboard(json.url);
+      setShareCopied(true);
+      shareCopiedTimerRef.current = setTimeout(() => {
+        setShareCopied(false);
+        shareCopiedTimerRef.current = null;
+      }, 3000);
+    } catch {
+      setShareError(GENERIC_ERROR_MESSAGE);
+    } finally {
+      setSharing(false);
+    }
+  }, [
+    rulingResult,
+    selectedCards,
+    selectedCategory,
+    situation,
+    sharing,
+  ]);
 
   const onFlag = useCallback(async () => {
     if (!rulingResult || flagging || flagged) return;
@@ -544,6 +635,12 @@ export default function Index() {
       }
       if (!res.ok) throw new Error('Failed to refine ruling');
       const json = (await res.json()) as RulingResponse;
+      if (shareCopiedTimerRef.current) {
+        clearTimeout(shareCopiedTimerRef.current);
+        shareCopiedTimerRef.current = null;
+      }
+      setShareCopied(false);
+      setShareError(null);
       setRulingResult(json);
       setRefineText('');
       requestAnimationFrame(() => {
@@ -560,6 +657,12 @@ export default function Index() {
   }, [refineText, refining, selectedCards, selectedCategory]);
 
   const goToStep1 = useCallback(() => {
+    if (shareCopiedTimerRef.current) {
+      clearTimeout(shareCopiedTimerRef.current);
+      shareCopiedTimerRef.current = null;
+    }
+    setShareCopied(false);
+    setShareError(null);
     setErrorMessage(null);
     setRulingResult(null);
     setSelectedCategory(null);
@@ -1014,6 +1117,26 @@ export default function Index() {
                     <Text style={styles.primaryButtonText}>Next Case</Text>
                   </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity
+                  onPress={onShareRuling}
+                  disabled={sharing}
+                  style={[
+                    styles.shareButton,
+                    sharing && styles.primaryButtonDisabled,
+                  ]}>
+                  {sharing ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color="#c8a882" />
+                      <Text style={styles.shareButtonText}>Sharing…</Text>
+                    </View>
+                  ) : shareCopied ? (
+                    <Text style={styles.shareButtonText}>✓ Link copied!</Text>
+                  ) : (
+                    <Text style={styles.shareButtonText}>Share this ruling</Text>
+                  )}
+                </TouchableOpacity>
+                {shareError ? <Text style={styles.flagErrorText}>{shareError}</Text> : null}
 
                 {flagged ? (
                   <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
@@ -1560,8 +1683,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
+  shareButton: {
+    width: '100%',
+    marginTop: 0,
+    minHeight: 52,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#c8a882',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
   flagButtonText: {
     color: '#9b2335',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: BODY_FONT,
+    textAlign: 'center',
+  },
+  shareButtonText: {
+    color: '#c8a882',
     fontSize: 13,
     fontWeight: '700',
     fontFamily: BODY_FONT,
