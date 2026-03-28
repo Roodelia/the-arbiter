@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -35,12 +36,24 @@ type ShareRulingResponse = {
 /** Production web app origin when building share links on iOS/Android. */
 const SHARE_APP_ORIGIN_NATIVE = 'https://the-arbiter-steel.vercel.app';
 
+const SHARE_RULING_TITLE = "Arbiter's verdict for MTG";
+
 function buildShareRulingUrl(shareId: string): string {
   const origin =
     Platform.OS === 'web' && typeof window !== 'undefined'
       ? window.location.origin
       : SHARE_APP_ORIGIN_NATIVE;
   return `${origin}/ruling/${shareId}`;
+}
+
+/** Plain text for Web Share / native share sheets (no rich formatting). Cards joined with " v ". */
+function buildSharePlainBody(url: string, cardNames: string[]): string {
+  const names = cardNames.map((n) => n.trim()).filter(Boolean);
+  const cardLine = names.join(' v ');
+  if (cardLine) {
+    return `${SHARE_RULING_TITLE}\n${cardLine}\n${url}`;
+  }
+  return `${SHARE_RULING_TITLE}\n${url}`;
 }
 
 async function copyShareUrlToClipboard(url: string): Promise<void> {
@@ -57,6 +70,51 @@ async function copyShareUrlToClipboard(url: string): Promise<void> {
     }
     throw new Error('Clipboard unavailable');
   }
+}
+
+/**
+ * Web: Web Share API when available; otherwise clipboard (caller shows "copied" UI).
+ * Native: system share sheet with plain text (title, "Card A v Card B …", URL).
+ * @returns 'clipboard' if URL was copied as fallback; otherwise undefined
+ */
+async function presentRulingShare(
+  url: string,
+  cardNames: string[],
+): Promise<'clipboard' | undefined> {
+  const text = buildSharePlainBody(url, cardNames);
+
+  if (Platform.OS === 'web') {
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      try {
+        await navigator.share({
+          title: SHARE_RULING_TITLE,
+          text,
+          url,
+        });
+        return undefined;
+      } catch (e) {
+        const aborted =
+          e !== null &&
+          typeof e === 'object' &&
+          'name' in e &&
+          (e as { name: string }).name === 'AbortError';
+        if (aborted) return undefined;
+        await copyShareUrlToClipboard(url);
+        return 'clipboard';
+      }
+    }
+    await copyShareUrlToClipboard(url);
+    return 'clipboard';
+  }
+
+  await Share.share({
+    title: SHARE_RULING_TITLE,
+    message: text,
+  });
+  return undefined;
 }
 
 type RulingResponse = {
@@ -539,12 +597,18 @@ export default function Index() {
       if (!res.ok) throw new Error('Share failed');
       const json = (await res.json()) as ShareRulingResponse;
       if (!json.id || typeof json.id !== 'string') throw new Error('Share failed');
-      await copyShareUrlToClipboard(buildShareRulingUrl(json.id));
-      setShareCopied(true);
-      shareCopiedTimerRef.current = setTimeout(() => {
-        setShareCopied(false);
-        shareCopiedTimerRef.current = null;
-      }, 3000);
+      const url = buildShareRulingUrl(json.id);
+      const usedClipboard = await presentRulingShare(
+        url,
+        selectedCards.map((c) => c.name),
+      );
+      if (usedClipboard === 'clipboard') {
+        setShareCopied(true);
+        shareCopiedTimerRef.current = setTimeout(() => {
+          setShareCopied(false);
+          shareCopiedTimerRef.current = null;
+        }, 3000);
+      }
     } catch {
       setShareError(GENERIC_ERROR_MESSAGE);
     } finally {
@@ -1116,7 +1180,7 @@ export default function Index() {
               </View>
 
               <View style={styles.refineDivider} />
-              <Text style={styles.refineSectionLabel}>New evidence?</Text>
+              <Text style={styles.refineSectionLabel}>Court Adjourned</Text>
               <View style={{ width: '100%', gap: 8 }}>
                 {refineError ? (
                   <Text style={styles.refineErrorText}>{refineError}</Text>

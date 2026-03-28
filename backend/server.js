@@ -250,7 +250,13 @@ app.post("/categories", async (req, res) => {
     const completion = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 200,
-      system: systemPrompt,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [
         {
           role: "user",
@@ -418,7 +424,13 @@ ${contextSection}`;
     const completion = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2048,
-      system: RULING_SYSTEM_PROMPT,
+      system: [
+        {
+          type: "text",
+          text: RULING_SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [
         {
           role: "user",
