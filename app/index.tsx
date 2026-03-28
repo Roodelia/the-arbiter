@@ -517,14 +517,15 @@ export default function Index() {
     setShareError(null);
     setSharing(true);
     try {
-      const categoryPayload = selectedCategoriesPayload(selectedCategory);
       const res = await fetch(`${BACKEND_BASE_URL}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: caseId.current,
           cards: selectedCards.map((c) => c.name),
-          ...(categoryPayload ? { category: categoryPayload } : {}),
+          ...(selectedCategory.length > 0
+            ? { category: selectedCategory }
+            : {}),
           ...(situation.trim() ? { situation: situation.trim() } : {}),
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,

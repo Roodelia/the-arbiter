@@ -599,8 +599,22 @@ app.post("/share", async (req, res) => {
   ) {
     return res.status(400).json({ error: "case_id must be a string" });
   }
-  if (category !== undefined && category !== null && typeof category !== "string") {
-    return res.status(400).json({ error: "category must be a string" });
+  if (
+    category !== undefined &&
+    category !== null &&
+    typeof category !== "string" &&
+    !Array.isArray(category)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "category must be a string, string array, or omitted" });
+  }
+  if (Array.isArray(category)) {
+    if (!category.every((c) => typeof c === "string")) {
+      return res
+        .status(400)
+        .json({ error: "category array must contain only strings" });
+    }
   }
   if (
     situation !== undefined &&
@@ -629,6 +643,16 @@ app.post("/share", async (req, res) => {
       typeof explanation === "string" ? explanation : "";
     const rulesList = Array.isArray(rules_cited) ? rules_cited : [];
 
+    let categoryForDb = null;
+    if (Array.isArray(category)) {
+      const parts = category
+        .map((c) => (typeof c === "string" ? c.trim() : String(c).trim()))
+        .filter(Boolean);
+      categoryForDb = parts.length > 0 ? JSON.stringify(parts) : null;
+    } else if (typeof category === "string" && category.trim().length > 0) {
+      categoryForDb = category.trim();
+    }
+
     for (let attempt = 0; attempt < 10; attempt++) {
       const shareId = generateShareId();
       const row = {
@@ -638,8 +662,7 @@ app.post("/share", async (req, res) => {
             ? case_id.trim()
             : null,
         cards,
-        category:
-          typeof category === "string" && category.length > 0 ? category : null,
+        category: categoryForDb,
         situation:
           typeof situation === "string" && situation.length > 0
             ? situation

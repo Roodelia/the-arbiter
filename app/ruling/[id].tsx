@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -61,7 +61,8 @@ type SharedRulingRow = {
   id: string;
   case_id?: string | null;
   cards?: unknown;
-  category?: string | null;
+  /** Stored as text: legacy plain/comma-separated string, or JSON.stringify(string[]). */
+  category?: unknown;
   situation?: string | null;
   ruling: string;
   explanation: string;
@@ -81,6 +82,38 @@ function normalizeRulesCited(raw: unknown): string[] {
   return raw
     .map((r) => (typeof r === 'string' ? r.trim() : String(r).trim()))
     .filter(Boolean);
+}
+
+/** Shared ruling category: native array from DB, JSON array string, legacy comma-separated, or single label. */
+function parseSharedCategoryLabels(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((x) => (typeof x === 'string' ? x.trim() : String(x).trim()))
+      .filter(Boolean);
+  }
+  if (typeof raw !== 'string') return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((x) => (typeof x === 'string' ? x.trim() : String(x).trim()))
+          .filter(Boolean);
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  if (trimmed.includes(',')) {
+    return trimmed
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [trimmed];
 }
 
 export default function SharedRulingScreen() {
@@ -201,6 +234,10 @@ export default function SharedRulingScreen() {
 
   const cardNames = ruling ? normalizeCardNames(ruling.cards) : [];
   const rulesCited = ruling ? normalizeRulesCited(ruling.rules_cited) : [];
+  const categoryLabels = useMemo(
+    () => (ruling ? parseSharedCategoryLabels(ruling.category) : []),
+    [ruling?.category],
+  );
 
   const modalCardName = activeCardPopup;
   const modalCachedUri = modalCardName ? imageUriCache[modalCardName] : undefined;
@@ -265,7 +302,7 @@ export default function SharedRulingScreen() {
                 </View>
               ) : null}
 
-              {(ruling.situation?.trim() || ruling.category?.trim()) ? (
+              {ruling.situation?.trim() || categoryLabels.length > 0 ? (
                 <View style={styles.situationBlock}>
                   <Text style={styles.resultHeading}>SITUATION</Text>
                   {ruling.situation?.trim() ? (
@@ -273,19 +310,25 @@ export default function SharedRulingScreen() {
                       {ruling.situation.trim()}
                     </Text>
                   ) : null}
-                  {ruling.category?.trim() ? (
+                  {categoryLabels.length > 0 ? (
                     <View style={[styles.chipsRow, styles.situationChipsRow]}>
-                      <View
-                        style={[styles.categoryChip, styles.categoryChipSelected]}>
-                        <Text
+                      {categoryLabels.map((label, idx) => (
+                        <View
+                          key={`${label}-${idx}`}
                           style={[
-                            styles.categoryChipText,
-                            styles.categoryChipTextSelected,
-                          ]}
-                          numberOfLines={2}>
-                          {ruling.category.trim()}
-                        </Text>
-                      </View>
+                            styles.categoryChip,
+                            styles.categoryChipSelected,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.categoryChipText,
+                              styles.categoryChipTextSelected,
+                            ]}
+                            numberOfLines={2}>
+                            {label}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                   ) : null}
                 </View>
