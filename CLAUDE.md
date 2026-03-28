@@ -58,7 +58,8 @@ POST /log
   - Input: { session_id, case_id, cards, selected_category?,
              situation?, ruling?, explanation?, rules_cited?,
              flagged?, flag_reason? }
-  - Upserts case record to Supabase cases table by case_id
+  - Upserts case record to Supabase cases table by case_id; sets ip_address
+    from X-Forwarded-For (first hop) or req.ip (trust proxy enabled for Railway)
   - Returns: { success: true }
 
 POST /share
@@ -136,10 +137,11 @@ Logged at three moments per case:
 Each case uses a UUID case_id (upserted, not inserted) so partial
 sessions appear as one row with null fields for incomplete steps.
 session_id groups multiple cases from the same app session.
+ip_address (text, nullable) stores the client IP for each upsert.
 Images are never stored — only card names.
 
 ## Database (Supabase)
-- **cases** — usage logging (see Usage Logging above)
+- **cases** — usage logging (see Usage Logging above); includes ip_address (add via backend/sql/add_cases_ip_address.sql if missing)
 - **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, created_at
 
 ## Rate Limiting

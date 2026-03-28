@@ -131,7 +131,22 @@ function generateShareId() {
   return out;
 }
 
+/** Original client IP behind proxies (e.g. Railway). Prefer X-Forwarded-For first hop, then req.ip. */
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim().length > 0) {
+    const first = forwarded.split(",")[0].trim();
+    if (first) return first;
+  }
+  if (typeof req.ip === "string" && req.ip.length > 0) {
+    return req.ip;
+  }
+  return req.socket?.remoteAddress || "";
+}
+
 const app = express();
+// So req.ip and rate-limit use X-Forwarded-For when behind Railway / reverse proxies
+app.set("trust proxy", 1);
 const port = process.env.PORT || 3000;
 
 app.use(cors({
@@ -295,6 +310,7 @@ app.post("/categories", async (req, res) => {
 });
 
 app.post("/ruling", async (req, res) => {
+  const clientIp = getClientIp(req);
   const { cards, situation, category } = req.body || {};
 
   if (!Array.isArray(cards) || cards.length === 0) {
@@ -478,12 +494,13 @@ ${contextSection}`;
       oracle_referenced,
     });
   } catch (err) {
-    console.error("Error in /ruling handler:", err);
+    console.error("Error in /ruling handler:", err, { clientIp });
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
 
 app.post("/log", async (req, res) => {
+  const clientIp = getClientIp(req);
   const {
     session_id,
     case_id,
@@ -508,6 +525,7 @@ app.post("/log", async (req, res) => {
     const otherFields = {
       session_id,
       cards,
+      ip_address: clientIp || null,
       ...(selected_category !== undefined && { selected_category }),
       ...(situation !== undefined && { situation }),
       ...(ruling !== undefined && { ruling }),
