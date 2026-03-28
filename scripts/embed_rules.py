@@ -23,6 +23,8 @@ Recommended by Anthropic as the embedding partner for Claude-based apps.
 import os
 import re
 import time
+from typing import Optional, Tuple
+
 import requests
 from dotenv import load_dotenv
 import voyageai
@@ -76,55 +78,126 @@ def download_cr(url: str, local_path: str) -> str:
 # STEP 2 — CHUNK BY RULE NUMBER
 # ─────────────────────────────────────────────
 
+# Subrule with letter suffix, e.g. 100.1a, 704.5k, 115.10a (space after letter)
+RULE_LETTER_SUFFIX_RE = re.compile(r"^(\d+)\.(\d+)([a-z])\s+(.+)$")
+# Subrule with trailing dot after digits, e.g. 100.1., 116.2., 115.10.
+RULE_NUMBER_DOT_RE = re.compile(r"^(\d+)\.(\d+)\.\s*(.+)$")
+# Major section header only (three+ digit chapter numbers), e.g. 100. General, 702. Keyword Abilities
+SECTION_HEADER_RE = re.compile(r"^(\d{3,})\.\s+(.+)$")
+
+
+def _parse_rule_line(line: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    If line starts a CR rule or section header, return (kind, rule_number, rest).
+    kind is 'rule' or 'section'; rule_number for rules is e.g. 100.1 or 116.2a; for section, None.
+    rest is text after the number for rules, or None for section (title parsed separately).
+    """
+    m = RULE_LETTER_SUFFIX_RE.match(line)
+    if m:
+        major, mid, letter, rest = m.groups()
+        return "rule", f"{major}.{mid}{letter}", rest
+    m = RULE_NUMBER_DOT_RE.match(line)
+    if m:
+        major, mid, rest = m.groups()
+        return "rule", f"{major}.{mid}", rest
+    m = SECTION_HEADER_RE.match(line)
+    if m:
+        return "section", None, None
+    return None, None, None
+
+
 def chunk_rules(cr_text: str) -> list[dict]:
     """
     Split CR text into chunks keyed by rule number.
-    Each numbered rule (e.g. 702.2a, 100.1, 903.10) becomes one chunk.
+    Each numbered subrule (e.g. 702.2a, 100.1, 115.10) becomes one chunk.
 
-    Strategy:
-    - Match lines starting with a rule number pattern
-    - Group the rule number + its text as one chunk
-    - Preserve the rule number separately for display in citations
+    Major section lines (e.g. 116. Special Actions, 702. Keyword Abilities) with no
+    substantive body (combined text under 80 characters) do not become chunks; the
+    title is stored and prepended to child rules, e.g.
+    "Special Actions — Rule 116.2a: Playing a land is..."
+    rule_number on chunks stays the child id (116.2a) for citations.
     """
-    chunks = []
+    chunks: list = []
+    lines = cr_text.split("\n")
+    current_rule_number: Optional[str] = None
+    current_rule_lines: list[str] = []
+    current_section_title: str | None = None
+    pending_section_lines: list[str] = []
 
-    # Rule number pattern: digits, optional dot+digits, optional letter
-    # Matches: 100., 702.2, 702.2a, 903.10b etc.
-    rule_pattern = re.compile(r'^(\d+\.(\d+[a-z]?)?)\s+(.+)', re.MULTILINE)
+    def flush_chunk() -> None:
+        nonlocal current_rule_number, current_rule_lines
+        if not current_rule_number or not current_rule_lines:
+            return
+        rule_text = " ".join(current_rule_lines).strip()
+        if len(rule_text) <= 10:
+            current_rule_number = None
+            current_rule_lines = []
+            return
+        if current_section_title:
+            display = f"{current_section_title} — Rule {current_rule_number}: {rule_text}"
+        else:
+            display = f"Rule {current_rule_number}: {rule_text}"
+        chunks.append(
+            {
+                "rule_number": current_rule_number,
+                "rule_text": display,
+            }
+        )
+        current_rule_number = None
+        current_rule_lines = []
 
-    # Also capture section headers (e.g. "2. Parts of a Card")
-    section_pattern = re.compile(r'^(\d+\.\s+[A-Z].+)$', re.MULTILINE)
-
-    lines = cr_text.split('\n')
-    current_rule_number = None
-    current_rule_lines = []
-
-    def flush_chunk():
-        if current_rule_number and current_rule_lines:
-            rule_text = ' '.join(current_rule_lines).strip()
-            if len(rule_text) > 10:  # skip empty or near-empty rules
-                chunks.append({
-                    "rule_number": current_rule_number,
-                    "rule_text": f"Rule {current_rule_number}: {rule_text}"
-                })
+    def flush_pending_section() -> None:
+        nonlocal pending_section_lines, current_section_title
+        if not pending_section_lines:
+            return
+        combined = " ".join(s.strip() for s in pending_section_lines if s.strip())
+        m = SECTION_HEADER_RE.match(pending_section_lines[0].strip())
+        if not m:
+            pending_section_lines = []
+            return
+        title = m.group(2).strip()
+        major = m.group(1)
+        if len(combined) < 80:
+            current_section_title = title
+        else:
+            current_section_title = title
+            chunks.append(
+                {
+                    "rule_number": f"{major}.",
+                    "rule_text": f"Rule {major}.: {combined}",
+                }
+            )
+        pending_section_lines = []
 
     for line in lines:
         line = line.strip()
         if not line:
             continue
 
-        match = rule_pattern.match(line)
-        if match:
-            # Save previous chunk
+        kind, rule_num, rest = _parse_rule_line(line)
+
+        if kind == "rule":
+            flush_pending_section()
             flush_chunk()
-            current_rule_number = match.group(1)
-            current_rule_lines = [match.group(3) if match.lastindex >= 3 else line]
-        elif current_rule_number and not re.match(r'^[A-Z][a-z]+$', line):
-            # Continuation of current rule (avoid appending section headers)
+            current_rule_number = rule_num
+            current_rule_lines = [rest] if rest else []
+            continue
+
+        if kind == "section":
+            flush_chunk()
+            flush_pending_section()
+            pending_section_lines = [line]
+            continue
+
+        if pending_section_lines:
+            pending_section_lines.append(line)
+            continue
+
+        if current_rule_number and not re.match(r"^[A-Z][a-z]+$", line):
             current_rule_lines.append(line)
 
-    # Flush the last chunk
     flush_chunk()
+    flush_pending_section()
 
     print(f"Chunked into {len(chunks):,} rule segments")
     return chunks

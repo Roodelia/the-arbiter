@@ -88,6 +88,9 @@ Calculate exact totals showing your working:
 Once you have completed all internal passes, output ONLY this:
 
 RULING: [Clear one or two sentence ruling with final numbers]
+The RULING line must be consistent with and supported by the EXPLANATION.
+Do not include reasoning in the RULING line that contradicts the EXPLANATION.
+The RULING should state the final answer only — no mechanistic reasoning.
 EXPLANATION: [Bullet points for a player at the table. One • per line, 
 3-5 bullets maximum. Each bullet is one key point of reasoning. 
 No pass labels or internal working.]
@@ -301,29 +304,11 @@ app.post("/ruling", async (req, res) => {
   }
 
   try {
-    // Server-side only — appears in the terminal / Railway backend logs, not the browser console.
-    console.warn("[ruling] request cards:", cards);
-
     const oracleData = [];
     for (const cardName of cards) {
       const cardInfo = await fetchCardOracle(cardName);
       oracleData.push(cardInfo);
     }
-
-    console.warn(
-      "[ruling] ORACLE DATA:",
-      JSON.stringify(
-        oracleData.map((c) => ({
-          name: c.name,
-          type: c.type_line,
-          oracle: c.oracle_text?.substring(0, 100),
-          rulings_count: c.rulings?.length || 0,
-          rulings: c.rulings,
-        })),
-        null,
-        2,
-      ),
-    );
 
     const oracleBlock = oracleData
       .map((c) => {
@@ -443,7 +428,7 @@ ${contextSection}`;
       completion.content && completion.content[0]
         ? completion.content[0].text
         : "";
-
+    
     const rulingHeader = "RULING:";
     let textForRulingParse = rawText;
     if ((textForRulingParse.split(rulingHeader).length - 1) > 1) {
