@@ -20,6 +20,11 @@ export default function Root({ children }: { children: React.ReactNode }) {
             background-color: #000000;
             height: 100%;
           }
+          /* RN Web: Step 3 helper box — muted copy (wrappers often set near-white) */
+          #arbiter-helper-verdict,
+          #arbiter-helper-verdict * {
+            color: #a0a0a0 !important;
+          }
         `}</style>
         <script defer src="/_vercel/insights/script.js"></script>
         <ScrollViewStyleReset />

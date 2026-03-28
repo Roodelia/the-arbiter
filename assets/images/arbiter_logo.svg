@@ -1,4 +1,4 @@
-<svg width="800" height="200" viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+<svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%"   stop-color="#c8a882"/>
@@ -8,8 +8,8 @@
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="800" height="200" fill="#000000"/>
+  <!-- Background (tight viewBox around wordmark for balanced vertical padding) -->
+  <rect x="0" y="62" width="800" height="118" fill="#000000"/>
 
   <!-- Main wordmark — all caps, Palatino -->
   <text

@@ -168,7 +168,7 @@ const BODY_FONT = 'sans-serif';
 
 /** Synced from assets/images/arbiter_logo.svg (RN loads via SvgXml; keep in sync when editing the file). */
 const ARBITER_LOGO_XML = `
-<svg width="800" height="200" viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+<svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%"   stop-color="#c8a882"/>
@@ -177,8 +177,8 @@ const ARBITER_LOGO_XML = `
       <stop offset="100%" stop-color="#9a7a58"/>
     </linearGradient>
   </defs>
-  <!-- Background -->
-  <rect width="800" height="200" fill="#000000"/>
+  <!-- Background (cropped viewBox keeps wordmark vertically centred in frame) -->
+  <rect x="0" y="62" width="800" height="118" fill="#000000"/>
   <!-- Main wordmark — all caps, Palatino -->
   <text
     x="400"
@@ -823,8 +823,8 @@ export default function Index() {
         <SvgXml
           xml={ARBITER_LOGO_XML}
           width={280}
-          height={70}
-          style={{ alignSelf: 'center', marginBottom: 8 }}
+          height={41}
+          style={{ alignSelf: 'center', marginVertical: 10 }}
         />
 
       {step === 1 ? (
@@ -864,19 +864,27 @@ export default function Index() {
               </View>
             ) : null}
 
-            <View style={styles.chipsRow}>
-              {selectedCards.map((card) => (
-                <Pressable
-                  key={card.name}
-                  onPress={() => removeCard(card.name)}
-                  style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
-                  <Text style={styles.chipText} numberOfLines={1}>
-                    <CardName name={card.name} /> {'  '}
-                    <Text style={styles.removeMark}>×</Text>
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            {!canGoToStep2 ? (
+              <Text style={styles.step1HelperHint}>
+                Add at least 1 card to continue.
+              </Text>
+            ) : null}
+
+            {selectedCards.length > 0 ? (
+              <View style={styles.chipsRow}>
+                {selectedCards.map((card) => (
+                  <Pressable
+                    key={card.name}
+                    onPress={() => removeCard(card.name)}
+                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      <CardName name={card.name} /> {'  '}
+                      <Text style={styles.removeMark}>×</Text>
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
 
             {selectedCards.length > 0 ? (
               <View style={{ width: '100%', alignItems: 'center', marginTop: 12 }}>
@@ -957,14 +965,6 @@ export default function Index() {
               </View>
             ) : null}
           </View>
-
-          {!canGoToStep2 ? (
-            <View style={styles.helperBox}>
-              <Text style={styles.helperText}>
-                Add at least 1 card to continue.
-              </Text>
-            </View>
-          ) : null}
 
           <View style={styles.section}>
             <Pressable
@@ -1269,8 +1269,10 @@ export default function Index() {
               </View>
             </View>
           ) : (
-            <View style={styles.helperBox}>
-              <Text style={styles.helperText}>No ruling yet. Go back and request one.</Text>
+            <View nativeID="arbiter-helper-verdict" style={styles.helperBox}>
+              <Text style={[styles.helperText, { color: COLOURS.textMuted }]}>
+                No ruling yet. Go back and request one.
+              </Text>
             </View>
           )}
         </>
@@ -1360,9 +1362,9 @@ const styles = StyleSheet.create({
     borderBottomColor: COLOURS.border,
   },
   stepLabel: {
-    color: '#585858',
+    color: COLOURS.text,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: '700',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 3,
@@ -1630,15 +1632,23 @@ const styles = StyleSheet.create({
   helperBox: {
     padding: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
+    borderWidth: 0,
     backgroundColor: COLOURS.surface,
     marginBottom: 16,
+  },
+  step1HelperHint: {
+    color: '#a0a0a0',
+    fontStyle: 'italic',
+    lineHeight: 20,
+    fontWeight: '400',
+    fontFamily: BODY_FONT,
+    fontSize: 14,
+    marginTop: 8,
   },
   helperText: {
     color: COLOURS.textMuted,
     lineHeight: 20,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: BODY_FONT,
     fontSize: 14,
   },
