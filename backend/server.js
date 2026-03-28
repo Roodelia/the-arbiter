@@ -103,7 +103,15 @@ Critical rules:
 - Always consider recursive interactions (A affects B which affects A)
 - Show explicit calculations for any numerical results
 - Only cite rule numbers from the provided context
-- If genuinely uncertain, say so explicitly rather than guessing`;
+- If genuinely uncertain, say so explicitly rather than guessing
+
+CRITICAL INTERACTION RULES:
+1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted (Deflecting Swat, Redirect), the controller does NOT change — new targets must be legal from the original controller's perspective.
+2. CAST vs ETB TIMING: "When you cast" triggers resolve BEFORE the spell resolves. "When [this] enters the battlefield" triggers happen AFTER. Never treat them as simultaneous.
+3. REPLACEMENT vs TRIGGERED: Replacement effects ("instead", "as", "with") modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities ("when", "whenever", "at") happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
+4. LAYERS (613): Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7a-d) P/T. Earlier layers always apply first regardless of timestamp.
+5. STATE-BASED ACTIONS: Checked when a player would receive priority. Happen simultaneously, don't use the stack. Includes: 0 toughness, lethal damage, 0 life, legend rule, counter cancellation.
+6. DOUBLERS: Token doublers (Doubling Season, Parallel Lives) are replacement effects and multiply with each other. Trigger doublers (Panharmonicon, Yarok) create additional stack triggers. These are different mechanics.`;
 
 const GENERIC_SERVER_ERROR_MESSAGE =
   "Something went wrong. Please try again.";
@@ -287,11 +295,29 @@ app.post("/ruling", async (req, res) => {
   }
 
   try {
+    // Server-side only — appears in the terminal / Railway backend logs, not the browser console.
+    console.warn("[ruling] request cards:", cards);
+
     const oracleData = [];
     for (const cardName of cards) {
       const cardInfo = await fetchCardOracle(cardName);
       oracleData.push(cardInfo);
     }
+
+    console.warn(
+      "[ruling] ORACLE DATA:",
+      JSON.stringify(
+        oracleData.map((c) => ({
+          name: c.name,
+          type: c.type_line,
+          oracle: c.oracle_text?.substring(0, 100),
+          rulings_count: c.rulings?.length || 0,
+          rulings: c.rulings,
+        })),
+        null,
+        2,
+      ),
+    );
 
     const oracleBlock = oracleData
       .map((c) => {
