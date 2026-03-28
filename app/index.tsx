@@ -44,7 +44,6 @@ function CardName({ name }: { name: string }) {
 
 const MAX_CARDS = 6;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
-//'https://the-arbiter-production.up.railway.app';
 
 const RATE_LIMIT_MESSAGE =
   "You've reached the limit of 60 verdicts per hour. Please try again later.";
@@ -923,36 +922,28 @@ export default function Index() {
                   .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
                   .filter(Boolean);
 
-                return explanationLines.map((line, index) => {
-                  const match = line.match(/^\d+\./);
-                  return match ? (
-                    <View
-                      key={index}
-                      style={{
-                        flexDirection: 'row',
-                        marginBottom: 6,
-                        paddingRight: 8,
-                      }}>
-                      <Text
-                        style={[
-                          styles.explanationText,
-                          {
-                            minWidth: 24,
-                            flexShrink: 0,
-                          },
-                        ]}>
-                        {match[0]}
-                      </Text>
-                      <Text style={[styles.explanationText, { flex: 1 }]}>
-                        {line.replace(/^\d+\.\s*/, '')}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text key={index} style={styles.explanationText}>
-                      {line}
+                return explanationLines.map((line, index) => (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: 'row',
+                      marginBottom: 6,
+                      paddingRight: 8,
+                    }}>
+                    <Text
+                      style={[
+                        styles.explanationText,
+                        {
+                          minWidth: 24,
+                          flexShrink: 0,
+                        },
+                      ]}
+                      accessible={false}>
+                      {'\u2022'}
                     </Text>
-                  );
-                });
+                    <Text style={[styles.explanationText, { flex: 1 }]}>{line}</Text>
+                  </View>
+                ));
               })()}
 
               <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>

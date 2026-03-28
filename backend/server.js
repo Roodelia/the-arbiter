@@ -87,10 +87,9 @@ Calculate exact totals showing your working:
 Once you have completed all internal passes, output ONLY this:
 
 RULING: [Clear one or two sentence ruling with final numbers]
-EXPLANATION: [A clean, concise explanation of the ruling written 
-for a player at the table. No pass labels or internal working. 
-Just the final reasoning a judge would deliver verbally, 
-3-5 sentences maximum.]
+EXPLANATION: [Bullet points for a player at the table. One • per line, 
+3-5 bullets maximum. Each bullet is one key point of reasoning. 
+No pass labels or internal working.]
 RULES CITED: [Rule numbers and descriptions, one per line]
 CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
 
@@ -114,6 +113,7 @@ const port = process.env.PORT || 3000;
 app.use(cors({
   origin: [
     'http://localhost:8081',
+    'http://192.168.86.27:8081',  
     'https://the-arbiter-production.up.railway.app',
     'https://the-arbiter-steel.vercel.app'
   ]
