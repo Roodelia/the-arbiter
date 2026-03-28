@@ -499,6 +499,14 @@ export default function Index() {
         }),
       });
       if (!res.ok) throw new Error('Flag request failed');
+      void logCase({
+        cards: selectedCards.map((c) => c.name),
+        selected_category: selectedCategory ?? undefined,
+        situation: situation.trim() || undefined,
+        ruling: rulingResult.ruling,
+        flagged: true,
+        flag_reason: flagReason.trim(),
+      });
       setFlagModalVisible(false);
       setFlagReason('');
     } catch {

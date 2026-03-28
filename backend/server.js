@@ -317,7 +317,7 @@ app.post("/ruling", async (req, res) => {
       "match_rules",
       {
         query_embedding: embedding,
-        match_count: 5,
+        match_count: 8,
       },
     );
 
@@ -325,6 +325,12 @@ app.post("/ruling", async (req, res) => {
       console.error("Supabase match_rules error:", supabaseError);
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
+
+    console.log("RAG MATCHES:", JSON.stringify(matches?.map(m => ({
+      rule: m.rule_number || m.rule,
+      text: (m.rule_text || m.text || "").substring(0, 100),
+      similarity: m.similarity
+    })), null, 2));
 
     const crChunks =
       matches && Array.isArray(matches)
