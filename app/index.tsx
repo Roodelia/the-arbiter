@@ -89,10 +89,10 @@ async function presentRulingShare(
       typeof navigator.share === 'function'
     ) {
       try {
+        // Omit `url` — `text` already ends with the link; including both duplicates it in many browsers.
         await navigator.share({
           title: SHARE_RULING_TITLE,
           text,
-          url,
         });
         return undefined;
       } catch (e) {
