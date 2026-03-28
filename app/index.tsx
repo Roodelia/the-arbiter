@@ -159,6 +159,8 @@ export default function Index() {
   const autocompleteAbortRef = useRef<AbortController | null>(null);
   const categoriesAbortRef = useRef<AbortController | null>(null);
   const rulingAbortRef = useRef<AbortController | null>(null);
+  /** Keeps latest appeal text in sync for logCase (state can lag one frame behind the last keystroke). */
+  const flagReasonRef = useRef('');
 
   const canRequestCategories = selectedCards.length >= 1;
   const canRequestRuling = selectedCards.length >= 1 && !isRulingLoading;
@@ -499,15 +501,19 @@ export default function Index() {
         }),
       });
       if (!res.ok) throw new Error('Flag request failed');
+      const trimmedReason = flagReasonRef.current.trim();
       void logCase({
         cards: selectedCards.map((c) => c.name),
         selected_category: selectedCategory ?? undefined,
         situation: situation.trim() || undefined,
         ruling: rulingResult.ruling,
+        explanation: rulingResult.explanation,
+        rules_cited: rulingResult.rules_cited,
         flagged: true,
-        flag_reason: flagReason.trim(),
+        flag_reason: trimmedReason,
       });
       setFlagModalVisible(false);
+      flagReasonRef.current = '';
       setFlagReason('');
     } catch {
       setFlagError(GENERIC_ERROR_MESSAGE);
@@ -561,6 +567,7 @@ export default function Index() {
     setFlagged(false);
     setFlagModalVisible(false);
     setFlagging(false);
+    flagReasonRef.current = '';
     setFlagReason('');
     setFlagError(null);
     setRefineText('');
@@ -1049,7 +1056,10 @@ export default function Index() {
             </Text>
             <TextInput
               value={flagReason}
-              onChangeText={setFlagReason}
+              onChangeText={(t) => {
+                flagReasonRef.current = t;
+                setFlagReason(t);
+              }}
               placeholder="What was wrong with the ruling? (optional)"
               placeholderTextColor="#3a3a3a"
               style={[styles.input, styles.multilineInput, styles.flagModalInput]}
@@ -1060,6 +1070,7 @@ export default function Index() {
               <Pressable
                 onPress={() => {
                   setFlagModalVisible(false);
+                  flagReasonRef.current = '';
                   setFlagReason('');
                 }}
                 disabled={flagging}
