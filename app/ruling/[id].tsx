@@ -2,14 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
@@ -70,11 +67,6 @@ type SharedRulingRow = {
   created_at?: string;
 };
 
-type CarouselCard = {
-  name: string;
-  image_uri: string | null;
-};
-
 function normalizeCardNames(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -99,38 +91,18 @@ export default function SharedRulingScreen() {
         : '';
 
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [ruling, setRuling] = useState<SharedRulingRow | null>(null);
-  const [carouselCards, setCarouselCards] = useState<CarouselCard[]>([]);
-  const [cardIndex, setCardIndex] = useState(0);
-  const carouselLenRef = useRef(0);
-  carouselLenRef.current = carouselCards.length;
-
-  const swipeThreshold = 20;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10,
-      onPanResponderRelease: (_, g) => {
-        setCardIndex((prev) => {
-          const len = carouselLenRef.current;
-          if (len <= 1) return prev;
-          if (g.dx < -swipeThreshold) {
-            return prev < len - 1 ? prev + 1 : prev;
-          }
-          if (g.dx > swipeThreshold) {
-            return prev > 0 ? prev - 1 : prev;
-          }
-          return prev;
-        });
-      },
-    })
-  ).current;
+  /** Card name → image URI or null after Scryfall fetch (undefined = not yet fetched). */
+  const [imageUriCache, setImageUriCache] = useState<
+    Record<string, string | null>
+  >({});
+  const imageUriCacheRef = useRef(imageUriCache);
+  imageUriCacheRef.current = imageUriCache;
+  const [activeCardPopup, setActiveCardPopup] = useState<string | null>(null);
 
   const fetchCardImageUri = useCallback(async (cardName: string) => {
     try {
@@ -201,27 +173,23 @@ export default function SharedRulingScreen() {
   }, [shareId]);
 
   useEffect(() => {
-    if (!ruling) {
-      setCarouselCards([]);
-      setCardIndex(0);
+    setActiveCardPopup(null);
+  }, [shareId, ruling?.id]);
+
+  useEffect(() => {
+    if (!activeCardPopup) return;
+    const name = activeCardPopup;
+    if (Object.prototype.hasOwnProperty.call(imageUriCacheRef.current, name)) {
       return;
     }
-    const names = normalizeCardNames(ruling.cards);
-    let cancelled = false;
 
-    void (async () => {
-      const uris = await Promise.all(names.map((n) => fetchCardImageUri(n)));
-      if (cancelled) return;
-      setCarouselCards(
-        names.map((name, i) => ({ name, image_uri: uris[i] ?? null }))
-      );
-      setCardIndex(0);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ruling, fetchCardImageUri]);
+    void fetchCardImageUri(name).then((uri) => {
+      setImageUriCache((prev) => {
+        if (Object.prototype.hasOwnProperty.call(prev, name)) return prev;
+        return { ...prev, [name]: uri };
+      });
+    });
+  }, [activeCardPopup, fetchCardImageUri]);
 
   const cardNames = ruling ? normalizeCardNames(ruling.cards) : [];
   const rulesCited = ruling ? normalizeRulesCited(ruling.rules_cited) : [];
@@ -259,108 +227,105 @@ export default function SharedRulingScreen() {
 
         {!loading && ruling && !notFound && !errorMessage ? (
           <>
-            {carouselCards.length > 0 ? (
-              <View style={styles.carouselOuter}>
-                <View style={[styles.carouselFrame, { width: cardWidth }]}>
-                  <View pointerEvents="box-only">
-                    <View
-                      {...panResponder.panHandlers}
-                      style={styles.carouselAspect}>
-                      {carouselCards[cardIndex]?.image_uri ? (
-                        <Image
-                          source={{
-                            uri: carouselCards[cardIndex]!.image_uri as string,
-                          }}
-                          style={styles.carouselImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.carouselPlaceholder} />
-                      )}
-                    </View>
-                  </View>
-
-                  {carouselCards.length > 1 && cardIndex > 0 ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setCardIndex((i) => Math.max(0, i - 1))
-                      }
-                      style={[
-                        styles.carouselArrow,
-                        { left: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
-                      ]}>
-                      <Text style={styles.carouselArrowLabel}>‹</Text>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  {carouselCards.length > 1 &&
-                  cardIndex < carouselCards.length - 1 ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setCardIndex((i) =>
-                          Math.min(carouselCards.length - 1, i + 1)
-                        )
-                      }
-                      style={[
-                        styles.carouselArrow,
-                        { right: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
-                      ]}>
-                      <Text style={styles.carouselArrowLabel}>›</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                {carouselCards.length > 1 ? (
-                  <View style={styles.carouselDotsRow}>
-                    {carouselCards.map((_, index) => (
-                      <View
-                        key={index}
-                        style={[
-                          styles.carouselDot,
-                          index === cardIndex ? styles.carouselDotActive : null,
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-
-                <Text style={styles.carouselCardName}>
-                  {carouselCards[cardIndex]?.name ?? ''}
-                </Text>
-              </View>
-            ) : null}
-
             <View style={styles.resultCard}>
-              <Text style={styles.sectionLabel}>Shared ruling</Text>
+              <Text style={styles.sectionLabel}>Cards</Text>
 
               {cardNames.length > 0 ? (
                 <View style={styles.chipsRow}>
-                  {cardNames.map((name, i) => (
-                    <View key={`${name}-${i}`} style={styles.readOnlyChip}>
-                      <Text style={styles.chipText} numberOfLines={1}>
-                        {name}
-                      </Text>
-                    </View>
-                  ))}
+                  {cardNames.map((name, i) => {
+                    const isOpen = activeCardPopup === name;
+                    const cachedUri = imageUriCache[name];
+                    const showLoading =
+                      isOpen &&
+                      !Object.prototype.hasOwnProperty.call(
+                        imageUriCache,
+                        name
+                      );
+
+                    const webPointerHandlers =
+                      Platform.OS === 'web'
+                        ? {
+                            onPointerEnter: () => setActiveCardPopup(name),
+                            onPointerLeave: () => setActiveCardPopup(null),
+                          }
+                        : {};
+
+                    return (
+                      <View
+                        key={`${name}-${i}`}
+                        style={styles.chipPopupHost}
+                        {...webPointerHandlers}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Show card image for ${name}`}
+                          onPress={
+                            Platform.OS === 'web'
+                              ? undefined
+                              : () =>
+                                  setActiveCardPopup((prev) =>
+                                    prev === name ? null : name
+                                  )
+                          }
+                          style={({ pressed }) => [
+                            styles.readOnlyChip,
+                            Platform.OS !== 'web' && pressed && styles.chipPressed,
+                            Platform.OS === 'web' && styles.readOnlyChipWeb,
+                          ]}>
+                          <Text style={styles.chipText} numberOfLines={1}>
+                            {name}
+                          </Text>
+                        </Pressable>
+                        {isOpen ? (
+                          <View style={styles.cardImagePopup}>
+                            {showLoading ? (
+                              <View style={styles.cardPopupSpinnerWrap}>
+                                <ActivityIndicator
+                                  color={COLOURS.titleAccent}
+                                  size="small"
+                                />
+                              </View>
+                            ) : cachedUri ? (
+                              <Image
+                                source={{ uri: cachedUri }}
+                                style={styles.cardPopupImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Text style={styles.cardPopupFallback}>
+                                No image found
+                              </Text>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
 
-              {ruling.category && ruling.category.trim() ? (
-                <View style={[styles.chipsRow, styles.categoryChipsRow]}>
-                  <View style={[styles.categoryChip, styles.categoryChipSelected]}>
-                    <Text
-                      style={[styles.categoryChipText, styles.categoryChipTextSelected]}
-                      numberOfLines={2}>
-                      {ruling.category.trim()}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-
-              {ruling.situation && ruling.situation.trim() ? (
+              {(ruling.situation?.trim() || ruling.category?.trim()) ? (
                 <View style={styles.situationBlock}>
                   <Text style={styles.resultHeading}>SITUATION</Text>
-                  <Text style={styles.situationText}>{ruling.situation.trim()}</Text>
+                  {ruling.situation?.trim() ? (
+                    <Text style={styles.situationText}>
+                      {ruling.situation.trim()}
+                    </Text>
+                  ) : null}
+                  {ruling.category?.trim() ? (
+                    <View style={[styles.chipsRow, styles.situationChipsRow]}>
+                      <View
+                        style={[styles.categoryChip, styles.categoryChipSelected]}>
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            styles.categoryChipTextSelected,
+                          ]}
+                          numberOfLines={2}>
+                          {ruling.category.trim()}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -414,7 +379,7 @@ export default function SharedRulingScreen() {
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Get your own ruling</Text>
+              <Text style={styles.primaryButtonText}>Ask the Arbiter</Text>
             </Pressable>
           </>
         ) : null}
@@ -427,7 +392,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLOURS.background,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   scrollContent: {
     flexGrow: 1,
@@ -437,6 +402,7 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
+    overflow: 'visible',
   },
   logo: {
     alignSelf: 'center',
@@ -463,74 +429,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  carouselOuter: {
+  chipPopupHost: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  chipPressed: {
+    opacity: 0.85,
+  },
+  /** In-flow below chip so web hover stays active over image (hit box includes popup). */
+  cardImagePopup: {
+    marginTop: 8,
+    width: 220,
+    maxWidth: '100%',
+    padding: 10,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  cardPopupSpinnerWrap: {
+    minHeight: 140,
     width: '100%',
     alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    justifyContent: 'center',
+    paddingVertical: 24,
   },
-  carouselFrame: {
-    position: 'relative',
-    overflow: 'visible',
-  },
-  carouselAspect: {
+  cardPopupImage: {
     width: '100%',
     aspectRatio: 63 / 88,
-  },
-  carouselImage: {
-    width: '100%',
-    height: '100%',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.background,
   },
-  carouselPlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    backgroundColor: COLOURS.surface,
-  },
-  carouselArrow: {
-    position: 'absolute',
-    top: '50%',
-    width: 36,
-    height: 36,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    transform: [{ translateY: -18 }],
-    zIndex: 2,
-  },
-  carouselArrowLabel: {
-    color: '#c8a882',
-    fontSize: 24,
-  },
-  carouselDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  carouselDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    margin: 3,
-    backgroundColor: '#2a2a2a',
-  },
-  carouselDotActive: {
-    backgroundColor: '#c8a882',
-  },
-  carouselCardName: {
-    color: '#c8a882',
+  cardPopupFallback: {
+    color: COLOURS.textMuted,
     fontSize: 13,
-    textAlign: 'center',
-    letterSpacing: 1,
-    marginTop: 6,
     fontFamily: BODY_FONT,
+    paddingVertical: 20,
+    textAlign: 'center',
   },
   resultCard: {
     marginTop: 12,
@@ -539,6 +481,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLOURS.surface,
     borderWidth: 1,
     borderColor: COLOURS.border,
+    overflow: 'visible',
   },
   sectionLabel: {
     color: '#585858',
@@ -554,19 +497,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    overflow: 'visible',
   },
-  categoryChipsRow: {
-    marginTop: 12,
+  situationChipsRow: {
+    marginTop: 10,
   },
   readOnlyChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#c8a882',
     backgroundColor: COLOURS.chipUnselected,
     justifyContent: 'center',
     maxWidth: '100%',
+  },
+  readOnlyChipWeb: {
+    cursor: 'pointer',
   },
   chipText: {
     color: '#c8a882',
@@ -583,6 +531,7 @@ const styles = StyleSheet.create({
     borderColor: '#2a2a2a',
     backgroundColor: '#111111',
     justifyContent: 'center',
+    maxWidth: '100%',
   },
   categoryChipSelected: {
     backgroundColor: '#93c572',
