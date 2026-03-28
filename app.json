@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "The Arbiter",
-    "slug": "The Arbiter",
+    "name": "Arbiter",
+    "slug": "arbiter",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

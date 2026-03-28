@@ -1,10 +1,16 @@
 import { Stack } from 'expo-router';
+import Head from 'expo-router/head';
 
 export default function Layout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="ruling/[id]" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <Head>
+        <title>Arbiter</title>
+      </Head>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="ruling/[id]" options={{ headerShown: false }} />
+      </Stack>
+    </>
   );
 }
