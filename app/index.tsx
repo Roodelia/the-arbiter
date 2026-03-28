@@ -137,7 +137,7 @@ const MAX_CARDS = 6;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
 
 const RATE_LIMIT_MESSAGE =
-  "You've reached the limit of 120 verdicts per hour. Please try again later.";
+  "You've reached the limit of 60 verdicts per hour. Please try again later.";
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
