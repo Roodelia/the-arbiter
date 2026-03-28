@@ -63,12 +63,11 @@ POST /log
 
 ## Scryfall Integration
 - Two calls per card: /cards/named?fuzzy= (oracle text) + /cards/{id}/rulings
-- In-memory cache (24hr TTL) to avoid repeat Scryfall calls
 - 100ms delay between requests to respect rate limits (max 10 req/sec)
 - image_uris.normal used for card images — falls back to card_faces for DFCs
 
 ## Two-Call Flow
-1. Player adds 2+ cards → app auto-calls /categories → displays chips
+1. Player adds 1+ cards → app auto-calls /categories → displays chips
 2. Player optionally taps a chip and/or types a situation
 3. Player taps "Get Verdict" → calls /ruling → displays result
 
@@ -102,8 +101,7 @@ Step 2 — Select Context
 
 Step 3 — View Verdict
   - Ruling card: RULING in pistachio green, EXPLANATION, RULES CITED tags
-  - "Judge, again!!!" full width secondary button
-  - "Present new evidence" (flex:1) + "Next Case" (flex:3) buttons
+  - "Back" (flex:1) + "Next Case" (flex:3) buttons
   - "Appeal this ruling" flag button (etruscan red border, no fill)
   - Flag flow: immediate log on tap → modal for optional reason → confirm
 
@@ -146,7 +144,8 @@ Images are never stored — only card names.
 - Small highlights (etruscan red): #9b2335
 - Text: #f0f0f0
 - Muted text: #a0a0a0
-- Font: Palatino Linotype (iOS) / Palatino / Book Antiqua / Georgia / serif
+- Font: serif (title), sans-serif / Helvetica Neue on iOS (body)
+- Palatino family used only in SVG logo
 
 ## Logo
 - SVG text logo: "ARBITER" in all caps

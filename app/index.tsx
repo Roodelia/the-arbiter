@@ -3,11 +3,11 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
-  Image,
-  PanResponder,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,7 +43,8 @@ function CardName({ name }: { name: string }) {
 }
 
 const MAX_CARDS = 6;
-const BACKEND_BASE_URL = 'https://the-arbiter-production.up.railway.app';
+const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
+//'https://the-arbiter-production.up.railway.app';
 
 const RATE_LIMIT_MESSAGE =
   "You've reached the limit of 60 verdicts per hour. Please try again later.";
