@@ -34,7 +34,7 @@ const COLOURS = {
 const BODY_FONT = 'sans-serif';
 
 const ARBITER_LOGO_XML = `
-<svg width="800" height="200" viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+<svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%"   stop-color="#c8a882"/>
@@ -43,7 +43,7 @@ const ARBITER_LOGO_XML = `
       <stop offset="100%" stop-color="#9a7a58"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="200" fill="#000000"/>
+  <rect x="0" y="62" width="800" height="118" fill="#000000"/>
   <text
     x="400"
     y="155"
@@ -287,7 +287,7 @@ export default function SharedRulingScreen() {
         <SvgXml
           xml={ARBITER_LOGO_XML}
           width={280}
-          height={70}
+          height={41}
           style={styles.logo}
         />
         <Text style={styles.sharedTagline}>
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     alignSelf: 'center',
-    marginBottom: 8,
+    marginVertical: 10,
   },
   sharedTagline: {
     color: '#a0a0a0',
