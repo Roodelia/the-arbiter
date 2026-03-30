@@ -11,8 +11,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SvgXml } from 'react-native-svg';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArbiterLogo } from '@/components/arbiter-logo';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -32,30 +32,6 @@ const COLOURS = {
 } as const;
 
 const BODY_FONT = 'sans-serif';
-
-const ARBITER_LOGO_XML = `
-<svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#c8a882"/>
-      <stop offset="45%"  stop-color="#e8c9a0"/>
-      <stop offset="65%"  stop-color="#c8a882"/>
-      <stop offset="100%" stop-color="#9a7a58"/>
-    </linearGradient>
-  </defs>
-  <rect x="0" y="62" width="800" height="118" fill="#000000"/>
-  <text
-    x="400"
-    y="155"
-    font-family="'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, serif"
-    font-size="110"
-    font-weight="700"
-    fill="url(#gold)"
-    text-anchor="middle"
-    letter-spacing="12"
-  >ARBITER</text>
-</svg>
-`.trim();
 
 type SharedRulingRow = {
   id: string;
@@ -284,12 +260,12 @@ export default function SharedRulingScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         directionalLockEnabled>
-        <SvgXml
-          xml={ARBITER_LOGO_XML}
-          width={280}
-          height={41}
-          style={styles.logo}
-        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go to The Arbiter home"
+          onPress={() => router.push('/')}>
+          <ArbiterLogo width={280} height={41} style={styles.logo} />
+        </Pressable>
         <Text style={styles.sharedTagline}>
           Demystifying card interactions for Magic: The Gathering
         </Text>

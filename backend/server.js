@@ -11,7 +11,7 @@ const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
 const CR_VERSION = process.env.CR_VERSION || "unknown";
 
-const limiter = rateLimit({
+const limiterOptions = {
   windowMs: 60 * 60 * 1000,  // 1 hour window
   max: 60,                     // max 60 requests per IP per hour
   standardHeaders: true,       // return rate limit info in headers
@@ -22,6 +22,17 @@ const limiter = rateLimit({
   handler: (req, res, next, options) => {
     res.status(429).json(options.message);
   }
+};
+
+const limiter = rateLimit(limiterOptions);
+
+const shareLimiter = rateLimit({
+  ...limiterOptions,
+  skip: (req) => {
+    if (req.method !== "GET") return false;
+    const path = String(req.originalUrl || "").split("?")[0];
+    return path === "/share/featured";
+  },
 });
 
 const FLAGGED_RULINGS_PATH = path.join(__dirname, "flagged_rulings.jsonl");
@@ -160,11 +171,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Rate limit: /categories, /ruling, /log, /share
+// Rate limit: /categories, /ruling, /log, /share (GET /share/featured excluded)
 app.use('/categories', limiter);
 app.use('/ruling', limiter);
 app.use('/log', limiter);
-app.use('/share', limiter);
+app.use("/share", shareLimiter);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -711,6 +722,23 @@ app.post("/share", async (req, res) => {
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   } catch (err) {
     console.error("Error in /share handler:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
+app.get("/share/featured", async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("shared_rulings")
+      .select("*")
+      .eq("featured", true)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+    return res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error("Error in GET /share/featured:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });

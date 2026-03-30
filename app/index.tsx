@@ -17,8 +17,9 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SvgXml } from 'react-native-svg';
+import { ArbiterLogo } from '@/components/arbiter-logo';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 
 type ScryfallAutocompleteResponse = {
   data: string[];
@@ -167,33 +168,6 @@ const COLOURS = {
 const TITLE_FONT = 'serif';
 const BODY_FONT = 'sans-serif';
 
-/** Synced from assets/images/arbiter_logo.svg (RN loads via SvgXml; keep in sync when editing the file). */
-const ARBITER_LOGO_XML = `
-<svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#c8a882"/>
-      <stop offset="45%"  stop-color="#e8c9a0"/>
-      <stop offset="65%"  stop-color="#c8a882"/>
-      <stop offset="100%" stop-color="#9a7a58"/>
-    </linearGradient>
-  </defs>
-  <!-- Background (cropped viewBox keeps wordmark vertically centred in frame) -->
-  <rect x="0" y="62" width="800" height="118" fill="#000000"/>
-  <!-- Main wordmark — all caps, Palatino -->
-  <text
-    x="400"
-    y="155"
-    font-family="'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, serif"
-    font-size="110"
-    font-weight="700"
-    fill="url(#gold)"
-    text-anchor="middle"
-    letter-spacing="12"
-  >ARBITER</text>
-</svg>
-`.trim();
-
 function uniqCaseInsensitive(items: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -210,7 +184,43 @@ function selectedCategoriesPayload(categories: string[]): string | undefined {
   return categories.length > 0 ? categories.join(', ') : undefined;
 }
 
+type FeaturedRulingItem = {
+  id: string;
+  cards: unknown;
+  ruling: string;
+};
+
+function featuredRulingTitleFromCards(cards: unknown): string {
+  let list: unknown[] = [];
+  if (Array.isArray(cards)) {
+    list = cards;
+  } else if (typeof cards === 'string' && cards.trim().length > 0) {
+    const raw = cards.trim();
+    if (raw.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {
+        list = [];
+      }
+    } else {
+      list = raw.split(',').map((c) => c.trim());
+    }
+  }
+  const names = list
+    .map((c) => (typeof c === 'string' ? c.trim() : String(c).trim()))
+    .filter(Boolean);
+  return names.join(' v ');
+}
+
+function rulingPreviewText(text: string, maxLen: number): string {
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen)}…`;
+}
+
 export default function Index() {
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -238,6 +248,11 @@ export default function Index() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const shareCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [featuredRulings, setFeaturedRulings] = useState<FeaturedRulingItem[]>([]);
+  const [featuredStatus, setFeaturedStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
 
   const [refineText, setRefineText] = useState('');
   const [refining, setRefining] = useState(false);
@@ -280,6 +295,50 @@ export default function Index() {
       if (shareCopiedTimerRef.current) {
         clearTimeout(shareCopiedTimerRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    const base = BACKEND_BASE_URL;
+    if (!base || typeof base !== 'string') {
+      setFeaturedStatus('error');
+      return;
+    }
+    let cancelled = false;
+    setFeaturedStatus('loading');
+    (async () => {
+      try {
+        const res = await fetch(`${base}/share/featured`);
+        if (!res.ok) throw new Error('featured not ok');
+        const data: unknown = await res.json();
+        if (cancelled) return;
+        if (!Array.isArray(data)) throw new Error('featured not array');
+        const items: FeaturedRulingItem[] = [];
+        for (const row of data) {
+          if (!row || typeof row !== 'object') continue;
+          const r = row as Record<string, unknown>;
+          const id =
+            typeof r.id === 'string' ? r.id : String(r.id ?? '').trim();
+          const ruling =
+            typeof r.ruling === 'string'
+              ? r.ruling
+              : typeof r.explanation === 'string'
+                ? r.explanation
+                : '';
+          if (!id) continue;
+          items.push({ id, cards: r.cards, ruling });
+        }
+        setFeaturedRulings(items);
+        setFeaturedStatus('success');
+      } catch {
+        if (!cancelled) {
+          setFeaturedRulings([]);
+          setFeaturedStatus('error');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -828,8 +887,7 @@ export default function Index() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
         directionalLockEnabled={true}>
-        <SvgXml
-          xml={ARBITER_LOGO_XML}
+        <ArbiterLogo
           width={280}
           height={41}
           style={{ alignSelf: 'center', marginVertical: 10 }}
@@ -997,6 +1055,45 @@ export default function Index() {
               <Text style={styles.primaryButtonText}>Present your case</Text>
             </Pressable>
           </View>
+
+          {featuredStatus === 'loading' ||
+          (featuredStatus === 'success' && featuredRulings.length > 0) ? (
+            <View style={styles.section}>
+              <View style={styles.refineDivider} />
+              <Text style={[styles.sectionLabel, { marginTop: 0 }]}>
+                Featured Rulings
+              </Text>
+              {featuredStatus === 'loading' ? (
+                <View style={styles.featuredLoadingWrap}>
+                  <ActivityIndicator color={COLOURS.chipSelected} />
+                </View>
+              ) : (
+                featuredRulings.map((item) => {
+                  const title =
+                    featuredRulingTitleFromCards(item.cards) || 'Featured ruling';
+                  const preview = rulingPreviewText(item.ruling, 150);
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => {
+                        router.push(`/ruling/${item.id}`);
+                      }}
+                      style={({ pressed }) => [
+                        styles.featuredRulingCard,
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text style={styles.featuredRulingTitle} numberOfLines={2}>
+                        {title}
+                      </Text>
+                      <Text style={styles.featuredRulingPreview} numberOfLines={3}>
+                        {preview}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          ) : null}
         </>
       ) : null}
 
@@ -1442,6 +1539,32 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 14,
     marginBottom: 8,
+  },
+  featuredLoadingWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredRulingCard: {
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.surface,
+  },
+  featuredRulingTitle: {
+    color: COLOURS.titleAccent,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: BODY_FONT,
+    marginBottom: 6,
+  },
+  featuredRulingPreview: {
+    color: COLOURS.textMuted,
+    fontSize: 13,
+    fontFamily: BODY_FONT,
+    lineHeight: 18,
   },
   searchRow: {
     flexDirection: 'row',
