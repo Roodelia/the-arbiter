@@ -1,0 +1,13 @@
+# Ignore all env files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.development.local
+.env.production.local
+
+# Supabase service keys, API tokens
+*.pem
+*.key
+secrets.*

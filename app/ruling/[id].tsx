@@ -67,6 +67,7 @@ type SharedRulingRow = {
   ruling: string;
   explanation: string;
   rules_cited?: unknown;
+  cr_version?: string | null;
   created_at?: string;
 };
 
@@ -114,6 +115,31 @@ function parseSharedCategoryLabels(raw: unknown): string[] {
       .filter(Boolean);
   }
   return [trimmed];
+}
+
+function formatCrVersionLabel(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  const readable = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+  return `Comprehensive Rules (${readable})`;
 }
 
 export default function SharedRulingScreen() {
@@ -237,6 +263,10 @@ export default function SharedRulingScreen() {
   const categoryLabels = useMemo(
     () => (ruling ? parseSharedCategoryLabels(ruling.category) : []),
     [ruling?.category],
+  );
+  const crVersionLabel = useMemo(
+    () => formatCrVersionLabel(ruling?.cr_version),
+    [ruling?.cr_version],
   );
 
   const modalCardName = activeCardPopup;
@@ -376,6 +406,9 @@ export default function SharedRulingScreen() {
                   </View>
                 ))}
               </View>
+              {crVersionLabel ? (
+                <Text style={styles.crVersionText}>{crVersionLabel}</Text>
+              ) : null}
             </View>
 
             <Pressable
@@ -659,6 +692,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
+  },
+  crVersionText: {
+    marginTop: 14,
+    color: '#a0a0a0',
+    fontSize: 11,
+    fontFamily: BODY_FONT,
+    textAlign: 'right',
   },
   primaryButton: {
     marginTop: 24,

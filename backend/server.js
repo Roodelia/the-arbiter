@@ -9,6 +9,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const { VoyageAIClient } = require("voyageai");
 const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
+const CR_VERSION = process.env.CR_VERSION || "unknown";
 
 const limiter = rateLimit({
   windowMs: 60 * 60 * 1000,  // 1 hour window
@@ -159,7 +160,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Apply to /categories and /ruling endpoints only
+// Rate limit: /categories, /ruling, /log, /share
 app.use('/categories', limiter);
 app.use('/ruling', limiter);
 app.use('/log', limiter);
@@ -492,6 +493,7 @@ ${contextSection}`;
       explanation,
       rules_cited,
       oracle_referenced,
+      cr_version: CR_VERSION,
     });
   } catch (err) {
     console.error("Error in /ruling handler:", err, { clientIp });
@@ -526,6 +528,7 @@ app.post("/log", async (req, res) => {
       session_id,
       cards,
       ip_address: clientIp || null,
+      cr_version: CR_VERSION,
       ...(selected_category !== undefined && { selected_category }),
       ...(situation !== undefined && { situation }),
       ...(ruling !== undefined && { ruling }),
@@ -685,6 +688,7 @@ app.post("/share", async (req, res) => {
         ruling: ruling.trim(),
         explanation: explanationStr,
         rules_cited: rulesList,
+        cr_version: CR_VERSION,
       };
 
       const { error } = await supabase.from("shared_rulings").insert(row);

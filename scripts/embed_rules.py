@@ -48,6 +48,18 @@ CR_LOCAL_FILE     = "comprehensive_rules.txt"  # cached local copy
 # If this URL breaks, check https://magic.wizards.com/en/rules for the latest link.
 CR_URL = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
 
+def _extract_cr_version(url: str) -> str:
+    """Extract YYYYMMDD from CR URL filename and return YYYY-MM-DD."""
+    match = re.search(r"(\d{8})(?=\.txt(?:$|\?))", url)
+    if not match:
+        match = re.search(r"(\d{8})", url)
+    if not match:
+        raise ValueError(f"Could not extract CR date from CR_URL: {url}")
+    raw = match.group(1)
+    return f"{raw[0:4]}-{raw[4:6]}-{raw[6:8]}"
+
+CR_VERSION = _extract_cr_version(CR_URL)
+
 
 # ─────────────────────────────────────────────
 # STEP 1 — DOWNLOAD THE COMPREHENSIVE RULES
@@ -271,7 +283,8 @@ def upload_to_supabase(chunks: list[dict], supabase_client) -> None:
             {
                 "rule_number": c["rule_number"],
                 "rule_text": c["rule_text"],
-                "embedding": c["embedding"]
+                "embedding": c["embedding"],
+                "cr_version": CR_VERSION,
             }
             for c in batch
         ]

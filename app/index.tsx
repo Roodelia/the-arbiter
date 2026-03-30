@@ -122,6 +122,7 @@ type RulingResponse = {
   explanation: string;
   rules_cited: string[];
   oracle_referenced: string;
+  cr_version?: string;
 };
 
 type SelectedCard = {
@@ -543,6 +544,7 @@ export default function Index() {
         ruling: json.ruling,
         explanation: json.explanation,
         rules_cited: json.rules_cited,
+        cr_version: json.cr_version,
       });
 
       if (shareCopiedTimerRef.current) {
@@ -588,6 +590,7 @@ export default function Index() {
           ruling: rulingResult.ruling,
           explanation: rulingResult.explanation,
           rules_cited: rulingResult.rules_cited ?? [],
+          cr_version: rulingResult.cr_version,
         }),
       });
       if (res.status === 429) {
@@ -649,6 +652,7 @@ export default function Index() {
         selected_category: categoryPayload,
         situation: situation.trim() || undefined,
         ruling: rulingResult.ruling,
+        cr_version: rulingResult.cr_version,
         flagged: true,
         flag_reason: flagReason,
       });
@@ -687,6 +691,7 @@ export default function Index() {
         ruling: rulingResult.ruling,
         explanation: rulingResult.explanation,
         rules_cited: rulingResult.rules_cited,
+        cr_version: rulingResult.cr_version,
         flagged: true,
         flag_reason: trimmedReason,
       });
