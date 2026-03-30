@@ -225,6 +225,7 @@ export default function Index() {
 
   const [rulingResult, setRulingResult] = useState<RulingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeStep3Card, setActiveStep3Card] = useState<SelectedCard | null>(null);
 
   const [flagged, setFlagged] = useState(false);
   const [flagModalVisible, setFlagModalVisible] = useState(false);
@@ -834,6 +835,9 @@ export default function Index() {
 
       {step === 1 ? (
         <>
+          <Text style={styles.step1Tagline}>
+            Demystifying card interactions for Magic: The Gathering
+          </Text>
           <View style={styles.section}>
             <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
             <View style={styles.searchRow}>
@@ -870,7 +874,7 @@ export default function Index() {
             ) : null}
 
             {!canGoToStep2 ? (
-              <Text style={styles.step1HelperHint}>
+              <Text style={styles.helperHint}>
                 Add at least 1 card to continue.
               </Text>
             ) : null}
@@ -992,7 +996,7 @@ export default function Index() {
       {step === 2 ? (
         <>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Selected cards</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Selected cards</Text>
             <View style={styles.chipsRow}>
               {selectedCards.map((card) => (
                 <Pressable
@@ -1114,79 +1118,89 @@ export default function Index() {
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           {rulingResult ? (
-            <View
-              style={styles.resultCard}
-              onLayout={(e) => {
-                rulingCardScrollYRef.current = e.nativeEvent.layout.y;
-              }}>
-              <Text style={styles.stepLabel}>Step 3: Receive Verdict</Text>
-
-              <Text style={styles.sectionLabel}>Selected cards</Text>
-              <View style={[styles.chipsRow, { marginBottom: 12 }]}>
-                {selectedCards.map((card) => (
-                  <View key={card.name} style={styles.chip}>
-                    <Text style={styles.chipText} numberOfLines={1}>
-                      <CardName name={card.name} />
-                    </Text>
-                  </View>
-                ))}
+            <>
+              <View style={styles.section}>
+                <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Selected cards</Text>
+                <View style={styles.chipsRow}>
+                  {selectedCards.map((card) => (
+                    <Pressable
+                      key={card.name}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Show card image for ${card.name}`}
+                      onPress={() => setActiveStep3Card(card)}
+                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
+                      <Text style={styles.chipText} numberOfLines={1}>
+                        <CardName name={card.name} />
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
 
-              <Text style={styles.sectionLabel}>RULING</Text>
-              <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
+              <View
+                style={[styles.section, { paddingBottom: 0 }]}
+                onLayout={(e) => {
+                  rulingCardScrollYRef.current = e.nativeEvent.layout.y;
+                }}>
+                <Text style={styles.stepLabel}>Step 3: Receive Verdict</Text>
+                <Text style={[styles.sectionLabel, { marginTop: 0 }]}>RULING</Text>
+                <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
 
-              <Text style={[styles.sectionLabel, styles.sectionLabelSpacer]}>
-                EXPLANATION
-              </Text>
-              {(() => {
-                const explanationLines = rulingResult.explanation
-                  .split('\n')
-                  .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
-                  .filter(Boolean);
+                <Text style={styles.sectionLabel}>
+                  EXPLANATION
+                </Text>
+                {(() => {
+                  const explanationLines = rulingResult.explanation
+                    .split('\n')
+                    .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
+                    .filter(Boolean);
 
-                return explanationLines.map((line, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: 'row',
-                      marginBottom: 6,
-                      paddingRight: 8,
-                    }}>
-                    <Text
-                      style={[
-                        styles.explanationText,
-                        {
-                          minWidth: 24,
-                          flexShrink: 0,
-                        },
-                      ]}
-                      accessible={false}>
-                      {'\u2022'}
-                    </Text>
-                    <Text style={[styles.explanationText, { flex: 1 }]}>{line}</Text>
-                  </View>
-                ));
-              })()}
+                  return explanationLines.map((line, index) => (
+                    <View
+                      key={index}
+                      style={{
+                        flexDirection: 'row',
+                        marginTop: 0,
+                        marginBottom: 6,
+                        paddingRight: 8,
+                      }}>
+                      <Text
+                        style={[
+                          styles.explanationText,
+                          {
+                            minWidth: 24,
+                            flexShrink: 0,
+                          },
+                        ]}
+                        accessible={false}>
+                        {'\u2022'}
+                      </Text>
+                      <Text style={[styles.explanationText, { flex: 1 }]}>{line}</Text>
+                    </View>
+                  ));
+                })()}
 
-              <Text style={[styles.sectionLabel, styles.sectionLabelSpacer]}>
-                RULES CITED
-              </Text>
-              <View style={styles.rulesRow}>
-                {(rulingResult.rules_cited ?? []).map((r) => (
-                  <Pressable
-                    key={r}
-                    onPress={() => onPressRuleTag(r)}
-                    style={({ pressed }) => [styles.ruleTag, pressed && styles.pressed]}>
-                    <Text style={styles.ruleTagText} numberOfLines={2}>
-                      {r}
-                    </Text>
-                  </Pressable>
-                ))}
+                <Text style={styles.sectionLabel}>
+                  RULES CITED
+                </Text>
+                <View style={styles.rulesRow}>
+                  {(rulingResult.rules_cited ?? []).map((r) => (
+                    <Pressable
+                      key={r}
+                      onPress={() => onPressRuleTag(r)}
+                      style={({ pressed }) => [styles.ruleTag, pressed && styles.pressed]}>
+                      <Text style={styles.ruleTagText} numberOfLines={2}>
+                        {r}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
 
               <View style={styles.refineDivider} />
-              <Text style={styles.refineSectionLabel}>Court Adjourned</Text>
-              <View style={{ width: '100%', gap: 8 }}>
+
+              <View style={styles.section}>
+                <View style={{ width: '100%', gap: 8 }}>
                 {refineError ? (
                   <Text style={styles.refineErrorText}>{refineError}</Text>
                 ) : null}
@@ -1271,8 +1285,9 @@ export default function Index() {
                     {flagError ? <Text style={styles.flagErrorText}>{flagError}</Text> : null}
                   </>
                 )}
+                </View>
               </View>
-            </View>
+            </>
           ) : (
             <View nativeID="arbiter-helper-verdict" style={styles.helperBox}>
               <Text style={[styles.helperText, { color: COLOURS.textMuted }]}>
@@ -1282,6 +1297,35 @@ export default function Index() {
           )}
         </>
       ) : null}
+      <Modal
+        visible={activeStep3Card !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveStep3Card(null)}>
+        <View style={styles.cardImageModalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss card image"
+            style={styles.cardImageModalBackdrop}
+            onPress={() => setActiveStep3Card(null)}
+          />
+          <View style={styles.cardImageModalCenterLayer} pointerEvents="box-none">
+            <View style={[styles.cardModalImageFrame, { width: cardWidth }]}>
+              {activeStep3Card?.image_uri ? (
+                <Image
+                  source={{ uri: activeStep3Card.image_uri }}
+                  style={styles.cardModalImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.cardModalFallbackWrap}>
+                  <Text style={styles.cardModalFallbackText}>No image found</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal transparent animationType="fade" visible={flagModalVisible}>
         <View style={styles.flagModalOverlay}>
           <View style={styles.flagModalCard}>
@@ -1375,6 +1419,13 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     fontFamily: BODY_FONT,
   },
+  step1Tagline: {
+    color: '#a0a0a0',
+    fontSize: 14,
+    fontFamily: 'serif',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   sectionLabel: {
     color: '#585858',
     fontWeight: '600',
@@ -1382,6 +1433,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: BODY_FONT,
     textTransform: 'uppercase',
+    marginTop: 14,
+    marginBottom: 8,
   },
   searchRow: {
     flexDirection: 'row',
@@ -1452,6 +1505,43 @@ const styles = StyleSheet.create({
   flagModalActionButton: {
     flex: 1,
   },
+  cardImageModalRoot: {
+    flex: 1,
+  },
+  cardImageModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+  },
+  cardImageModalCenterLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardModalImageFrame: {
+    aspectRatio: 63 / 88,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: COLOURS.background,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+  },
+  cardModalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardModalFallbackWrap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  cardModalFallbackText: {
+    color: COLOURS.textMuted,
+    fontSize: 13,
+    fontFamily: BODY_FONT,
+    textAlign: 'center',
+  },
   flagReasonInput: {
     minHeight: 60,
     padding: 14,
@@ -1517,7 +1607,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   chipsRow: {
-    marginTop: 12,
+    marginTop: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
@@ -1603,7 +1693,7 @@ const styles = StyleSheet.create({
   },
   tertiaryButtonText: {
     color: COLOURS.textMuted,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '400',
     fontFamily: BODY_FONT,
   },
@@ -1641,13 +1731,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLOURS.surface,
     marginBottom: 16,
   },
-  step1HelperHint: {
+  helperHint: {
     color: '#a0a0a0',
-    fontStyle: 'italic',
-    lineHeight: 20,
-    fontWeight: '400',
-    fontFamily: BODY_FONT,
-    fontSize: 14,
+    fontFamily: 'serif',
+    textAlign: 'left',
+    fontSize: 12,
     marginTop: 8,
   },
   helperText: {
@@ -1657,19 +1745,7 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
     fontSize: 14,
   },
-  resultCard: {
-    marginTop: 6,
-    padding: 18,
-    borderRadius: 14,
-    backgroundColor: COLOURS.surface,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-  },
-  sectionLabelSpacer: {
-    marginTop: 14,
-  },
   rulingText: {
-    marginTop: 6,
     color: COLOURS.rulingText,
     fontSize: 16,
     fontWeight: '700',
@@ -1684,7 +1760,6 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   rulesRow: {
-    marginTop: 10,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
@@ -1707,20 +1782,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   refineDivider: {
-    height: 0,
-    backgroundColor: 'transparent',
+    height: 1,
+    backgroundColor: '#1e1e1e',
     width: '100%',
-    marginTop: 14,
-  },
-  refineSectionLabel: {
-    fontSize: 10,
-    letterSpacing: 3,
-    color: '#585858',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    marginTop: 8,
-    fontFamily: BODY_FONT,
-    fontWeight: '600',
+    marginVertical: 16,
   },
   refineInput: {
     backgroundColor: '#111111',
@@ -1818,14 +1883,14 @@ const styles = StyleSheet.create({
   },
   flagButtonText: {
     color: '#9b2335',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
   shareButtonText: {
     color: '#c8a882',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',

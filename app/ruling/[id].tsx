@@ -290,6 +290,9 @@ export default function SharedRulingScreen() {
           height={70}
           style={styles.logo}
         />
+        <Text style={styles.sharedTagline}>
+          Demystifying card interactions for Magic: The Gathering
+        </Text>
 
         {loading ? (
           <View style={styles.centeredBlock}>
@@ -485,6 +488,13 @@ const styles = StyleSheet.create({
   logo: {
     alignSelf: 'center',
     marginBottom: 8,
+  },
+  sharedTagline: {
+    color: '#a0a0a0',
+    fontSize: 14,
+    fontFamily: 'serif',
+    textAlign: 'center',
+    marginBottom: 16,
   },
   centeredBlock: {
     alignItems: 'center',
