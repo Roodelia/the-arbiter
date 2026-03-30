@@ -134,7 +134,7 @@ function CardName({ name }: { name: string }) {
   return <Text style={styles.cardNameText}>{name}</Text>;
 }
 
-const MAX_CARDS = 6;
+const MAX_CARDS = 4;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
 
 const RATE_LIMIT_MESSAGE =
@@ -226,6 +226,7 @@ export default function Index() {
   const [rulingResult, setRulingResult] = useState<RulingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeStep3Card, setActiveStep3Card] = useState<SelectedCard | null>(null);
+  const [maxCardsError, setMaxCardsError] = useState<string | null>(null);
 
   const [flagged, setFlagged] = useState(false);
   const [flagModalVisible, setFlagModalVisible] = useState(false);
@@ -267,11 +268,6 @@ export default function Index() {
   const canRequestCategories = selectedCards.length >= 1;
   const canRequestRuling = selectedCards.length >= 1 && !isRulingLoading;
   const canGoToStep2 = selectedCards.length >= 1;
-
-  const selectedCardsCountLabel = useMemo(
-    () => `${selectedCards.length}/${MAX_CARDS}`,
-    [selectedCards.length]
-  );
 
   // Used to avoid refetching categories when only image_uri changes.
   const selectedCardNamesKey = useMemo(
@@ -396,15 +392,20 @@ export default function Index() {
 
         if (existsIndex !== -1) {
           // Preserve existing image_uri; only refresh the display name casing.
+          setMaxCardsError(null);
           return prev.map((c, idx) => (idx === existsIndex ? { ...c, name: cardName } : c));
         }
 
-        if (prev.length >= MAX_CARDS) return prev;
+        if (prev.length >= MAX_CARDS) {
+          setMaxCardsError('4 cards maximum — remove one to add another');
+          return prev;
+        }
 
         const updated = [...prev, { name: cardName, image_uri: null }].slice(
           0,
           MAX_CARDS
         );
+        setMaxCardsError(null);
         setCardIndex(updated.length - 1);
         return updated;
       });
@@ -433,6 +434,7 @@ export default function Index() {
     setSelectedCards((prev) =>
       prev.filter((c) => c.name.trim().toLowerCase() !== normalized)
     );
+    setMaxCardsError(null);
     setRulingResult(null);
     setStep((prev) => (prev === 3 ? 2 : prev));
   }, []);
@@ -840,20 +842,25 @@ export default function Index() {
           </Text>
           <View style={styles.section}>
             <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
-            <View style={styles.searchRow}>
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search for a card..."
-                placeholderTextColor={COLOURS.textMuted}
-                style={[styles.input, styles.searchInput]}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-              <View style={styles.counterPill}>
-                <Text style={styles.counterText}>{selectedCardsCountLabel}</Text>
+            {selectedCards.length < MAX_CARDS ? (
+              <View style={styles.searchRow}>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search for a card..."
+                  placeholderTextColor={COLOURS.textMuted}
+                  style={[styles.input, styles.searchInput]}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
               </View>
-            </View>
+            ) : (
+              <Text style={styles.helperHint}>4 cards maximum — remove one to add another</Text>
+            )}
+
+            {maxCardsError && selectedCards.length < MAX_CARDS ? (
+              <Text style={styles.helperHint}>{maxCardsError}</Text>
+            ) : null}
 
             {suggestions.length > 0 && selectedCards.length < MAX_CARDS ? (
               <View style={styles.suggestions}>
