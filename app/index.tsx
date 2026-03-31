@@ -1,3 +1,5 @@
+import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
+import { fetchCardImageUri } from '@/utils/scryfall';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -137,32 +139,12 @@ const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL
 const RATE_LIMIT_MESSAGE =
   "You've reached the limit of 60 verdicts per hour. Please try again later.";
 
-const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
-
 const NO_CATEGORIES_MESSAGE =
   "Couldn't load interaction categories. You can still describe your situation below and get a verdict.";
 
 const NO_RULING_MESSAGE =
   "ManaJudge couldn't reach a verdict. Please try again or rephrase your situation.";
 
-const COLOURS = {
-  background: '#000000',
-  surface: '#111111',
-  titleAccent: '#c8a882',
-  primaryButton: '#9b2335',
-  highlight: '#9b2335',
-  chipSelected: '#93c572',
-  chipUnselected: '#111111',
-  cardName: '#7C6F9B',
-  rulesTag: '#c8a882',
-  rulingText: '#93c572',
-  text: '#f0f0f0',
-  textMuted: '#a0a0a0',
-  border: '#1e1e1e',
-} as const;
-
-const TITLE_FONT = 'serif';
-const BODY_FONT = 'sans-serif';
 
 function uniqCaseInsensitive(items: string[]): string[] {
   const seen = new Set<string>();
@@ -399,25 +381,6 @@ export default function Index() {
     }
   }, []);
 
-  const fetchCardImageUri = useCallback(async (cardName: string) => {
-    try {
-      const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(
-        cardName
-      )}`;
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return (
-        data.image_uris?.normal ||
-        data.image_uris?.large ||
-        data.card_faces?.[0]?.image_uris?.normal ||
-        null
-      );
-    } catch {
-      return null;
-    }
-  }, []);
-
   useEffect(() => {
     setErrorMessage(null);
     if (query.trim().length < 2) {
@@ -481,7 +444,7 @@ export default function Index() {
       setRulingResult(null);
       setStep((prev) => (prev === 3 ? 2 : prev));
     },
-    [fetchCardImageUri]
+    []
   );
 
   const removeCard = useCallback((cardName: string) => {
@@ -689,20 +652,6 @@ export default function Index() {
     setFlagging(true);
     try {
       const categoryPayload = selectedCategoriesPayload(selectedCategory);
-      const res = await fetch(`${BACKEND_BASE_URL}/flag`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cards: selectedCards.map((c) => c.name),
-          category: categoryPayload,
-          situation: situation.trim() || undefined,
-          ruling: rulingResult.ruling,
-          explanation: rulingResult.explanation,
-          rules_cited: rulingResult.rules_cited,
-          reason: '',
-        }),
-      });
-      if (!res.ok) throw new Error('Flag request failed');
       setFlagged(true);
       setFlagModalVisible(true);
       void logCase({
@@ -727,20 +676,6 @@ export default function Index() {
     setFlagging(true);
     try {
       const categoryPayload = selectedCategoriesPayload(selectedCategory);
-      const res = await fetch(`${BACKEND_BASE_URL}/flag`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cards: selectedCards.map((c) => c.name),
-          category: categoryPayload,
-          situation: situation.trim() || undefined,
-          ruling: rulingResult.ruling,
-          explanation: rulingResult.explanation,
-          rules_cited: rulingResult.rules_cited,
-          reason: flagReason.trim() || undefined,
-        }),
-      });
-      if (!res.ok) throw new Error('Flag request failed');
       const trimmedReason = flagReasonRef.current.trim();
       void logCase({
         cards: selectedCards.map((c) => c.name),
@@ -864,7 +799,7 @@ export default function Index() {
     <View
       style={{
         flex: 1,
-        backgroundColor: '#000000',
+        backgroundColor: COLOURS.background,
         overflow: 'hidden',
       }}>
       <ScrollView
@@ -981,7 +916,7 @@ export default function Index() {
                           height: '100%',
                           borderRadius: 8,
                           borderWidth: 1,
-                          borderColor: '#1e1e1e',
+                          borderColor: COLOURS.border,
                         }}
                         resizeMode="cover"
                       />
@@ -1033,7 +968,7 @@ export default function Index() {
             ) : null}
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, styles.step1ActionSection]}>
             <Pressable
               onPress={() => {
                 void logCase({ cards: selectedCards.map((c) => c.name) });
@@ -1045,13 +980,13 @@ export default function Index() {
                 !canGoToStep2 && styles.primaryButtonDisabled,
                 pressed && canGoToStep2 && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Present your case</Text>
+              <Text style={styles.primaryButtonText}>Request Verdict</Text>
             </Pressable>
           </View>
 
           {featuredStatus === 'loading' ||
           (featuredStatus === 'success' && featuredRulings.length > 0) ? (
-            <View style={styles.section}>
+            <View style={[styles.section, styles.step1FeaturedSection]}>
               <View style={styles.refineDivider} />
               <Text style={[styles.sectionLabel, { marginTop: 0 }]}>
                 Featured Rulings
@@ -1134,7 +1069,7 @@ export default function Index() {
                       style={[
                         styles.categoryChipText,
                         {
-                          color: selected ? '#111111' : '#a0a0a0',
+                          color: selected ? COLOURS.chipUnselected : COLOURS.textMuted,
                           fontWeight: selected ? '700' : '400',
                         },
                       ]}>
@@ -1151,7 +1086,7 @@ export default function Index() {
               value={situation}
               onChangeText={setSituation}
               placeholder="Describe the situation (optional)..."
-              placeholderTextColor="#3a3a3a"
+              placeholderTextColor={COLOURS.placeholder}
               style={[styles.input, styles.multilineInput]}
               multiline
               textAlignVertical="top"
@@ -1159,31 +1094,15 @@ export default function Index() {
           </View>
 
           <View style={styles.section}>
-            <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+            <View style={styles.step2ActionRow}>
               <TouchableOpacity
-                style={{
-                  flex: 1,
-                  backgroundColor: '#111111',
-                  borderWidth: 1,
-                  borderColor: '#1e1e1e',
-                  borderRadius: 10,
-                  height: 52,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={styles.step2BackButton}
                 onPress={goToStep1}
               >
-                <Text style={{ color: '#a0a0a0', fontSize: 16 }}>Back</Text>
+                <Text style={styles.step2BackButtonText}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{
-                  flex: 3,
-                  backgroundColor: '#9b2335',
-                  borderRadius: 10,
-                  height: 52,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={styles.step2VerdictButton}
                 onPress={requestRuling}
                 disabled={!canRequestRuling}
               >
@@ -1193,14 +1112,7 @@ export default function Index() {
                     <Text style={styles.primaryButtonText}>Jury deliberating…</Text>
                   </View>
                 ) : (
-                  <Text
-                    style={{
-                      color: '#f0f0f0',
-                      fontSize: 16,
-                      fontWeight: '700',
-                    }}>
-                    Get Verdict
-                  </Text>
+                  <Text style={styles.step2VerdictButtonText}>Get Verdict</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1312,7 +1224,7 @@ export default function Index() {
                   ]}>
                   {sharing ? (
                     <View style={styles.loadingRow}>
-                      <ActivityIndicator color="#111111" />
+                      <ActivityIndicator color={COLOURS.chipUnselected} />
                       <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
                         Sharing…
                       </Text>
@@ -1337,7 +1249,7 @@ export default function Index() {
                   }}
                   style={[styles.tertiaryButton, styles.step3ResetButton]}>
                   <Text style={[styles.tertiaryButtonText, styles.step3ResetButtonText]}>
-                    Present another Case
+                    Request another Verdict
                   </Text>
                 </TouchableOpacity>
 
@@ -1359,7 +1271,7 @@ export default function Index() {
 
                   {flagged ? (
                     <View style={[styles.step3FlagConfirmationWrap, { flex: 3 }]}>
-                      <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
+                      <Text style={styles.flagConfirmText}>✓ Verdict flagged. Thank you.</Text>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -1372,7 +1284,7 @@ export default function Index() {
                       ]}>
                       {flagging ? (
                         <View style={styles.loadingRow}>
-                          <ActivityIndicator color="#9b2335" />
+                          <ActivityIndicator color={COLOURS.primaryButton} />
                           <Text style={styles.flagButtonText}>Appealing…</Text>
                         </View>
                       ) : (
@@ -1440,7 +1352,7 @@ export default function Index() {
                 setFlagReason(t);
               }}
               placeholder="What was wrong with the ruling? (optional)"
-              placeholderTextColor="#3a3a3a"
+              placeholderTextColor={COLOURS.placeholder}
               style={[styles.input, styles.multilineInput, styles.flagModalInput]}
               multiline
               textAlignVertical="top"
@@ -1520,14 +1432,14 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   step1Tagline: {
-    color: '#a0a0a0',
+    color: COLOURS.textMuted,
     fontSize: 14,
     fontFamily: 'serif',
     textAlign: 'center',
     marginBottom: 16,
   },
   sectionLabel: {
-    color: '#585858',
+    color: COLOURS.sectionLabel,
     fontWeight: '600',
     letterSpacing: 3,
     fontSize: 10,
@@ -1561,6 +1473,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: BODY_FONT,
     lineHeight: 18,
+  },
+  step1ActionSection: {
+    marginBottom: 8,
+    paddingBottom: 8,
+  },
+  step1FeaturedSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
   },
   searchRow: {
     flexDirection: 'row',
@@ -1601,20 +1521,20 @@ const styles = StyleSheet.create({
   flagModalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#111111',
+    backgroundColor: COLOURS.surface,
     borderRadius: 16,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#1e1e1e',
+    borderColor: COLOURS.border,
   },
   flagModalTitle: {
-    color: '#f0f0f0',
+    color: COLOURS.text,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
   },
   flagModalSubtitle: {
-    color: '#a0a0a0',
+    color: COLOURS.textMuted,
     fontSize: 14,
     marginTop: 8,
     fontFamily: BODY_FONT,
@@ -1675,12 +1595,13 @@ const styles = StyleSheet.create({
     flex: 0,
   },
   flagConfirmText: {
-    marginTop: 20,
-    color: '#93c572',
+    marginTop: 0,
+    color: COLOURS.chipSelected,
     fontSize: 14,
     fontFamily: BODY_FONT,
     fontWeight: '600',
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
   flagErrorText: {
     marginTop: 8,
@@ -1737,7 +1658,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#7C6F9B',
+    borderColor: COLOURS.cardName,
     backgroundColor: COLOURS.chipUnselected,
     justifyContent: 'center',
     maxWidth: '100%',
@@ -1749,7 +1670,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   cardChipRemoveMark: {
-    color: '#9b2335',
+    color: COLOURS.highlight,
     fontWeight: 'bold',
     fontFamily: BODY_FONT,
   },
@@ -1759,13 +1680,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
-    backgroundColor: '#111111',
+    borderColor: COLOURS.chipBorder,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
   },
   categoryChipSelected: {
-    backgroundColor: '#c8a882',
-    borderColor: '#c8a882',
+    backgroundColor: COLOURS.titleAccent,
+    borderColor: COLOURS.titleAccent,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
@@ -1822,7 +1743,7 @@ const styles = StyleSheet.create({
     borderColor: COLOURS.titleAccent,
   },
   startOverButtonText: {
-    color: '#1a1200',
+    color: COLOURS.tagBackground,
     fontWeight: '600',
   },
   loadingRow: {
@@ -1838,6 +1759,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     width: '100%',
     gap: 8,
+  },
+  step2ActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+  },
+  step2BackButton: {
+    flex: 1,
+    backgroundColor: COLOURS.surface,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    borderRadius: 10,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  step2BackButtonText: {
+    color: COLOURS.textMuted,
+    fontSize: 16,
+  },
+  step2VerdictButton: {
+    flex: 3,
+    backgroundColor: COLOURS.primaryButton,
+    borderRadius: 10,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  step2VerdictButtonText: {
+    color: COLOURS.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   step3SharePrimaryButton: {
     marginTop: 0,
@@ -1858,11 +1811,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    borderColor: '#7C6F9B',
+    borderColor: COLOURS.cardName,
     borderWidth: 1,
   },
   step3ResetButtonText: {
-    color: '#7C6F9B',
+    color: COLOURS.cardName,
   },
   step3FlagConfirmationWrap: {
     minHeight: 52,
@@ -1872,6 +1825,7 @@ const styles = StyleSheet.create({
     borderColor: COLOURS.border,
     borderRadius: 12,
     paddingHorizontal: 12,
+    paddingVertical: 14,
   },
   loadingText: {
     color: COLOURS.textMuted,
@@ -1895,7 +1849,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   helperHint: {
-    color: '#a0a0a0',
+    color: COLOURS.textMuted,
     fontFamily: 'serif',
     textAlign: 'left',
     fontSize: 14,
@@ -1916,7 +1870,7 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   explanationText: {
-    color: '#f0f0f0',
+    color: COLOURS.text,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 6,
@@ -1933,30 +1887,30 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#c8a882',
-    backgroundColor: '#1a1200',
+    borderColor: COLOURS.rulesTag,
+    backgroundColor: COLOURS.tagBackground,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   ruleTagText: {
-    color: '#c8a882',
+    color: COLOURS.rulesTag,
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
   },
   refineDivider: {
     height: 1,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: COLOURS.border,
     width: '100%',
     marginVertical: 16,
   },
   refineInput: {
-    backgroundColor: '#111111',
+    backgroundColor: COLOURS.surface,
     borderWidth: 1,
-    borderColor: '#1e1e1e',
+    borderColor: COLOURS.border,
     borderRadius: 12,
     padding: 14,
-    color: '#f0f0f0',
+    color: COLOURS.text,
     fontSize: 16,
     minHeight: 80,
     fontFamily: BODY_FONT,
@@ -1976,8 +1930,8 @@ const styles = StyleSheet.create({
     borderColor: COLOURS.primaryButton,
   },
   refineButtonDisabled: {
-    backgroundColor: '#111111',
-    borderColor: '#1e1e1e',
+    backgroundColor: COLOURS.surface,
+    borderColor: COLOURS.border,
   },
   refineButtonTextEnabled: {
     color: COLOURS.text,
@@ -1987,14 +1941,14 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   refineButtonTextDisabled: {
-    color: '#3a3a3a',
+    color: COLOURS.placeholder,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: BODY_FONT,
   },
   refineErrorText: {
-    color: '#9b2335',
+    color: COLOURS.highlight,
     fontSize: 12,
     marginTop: 4,
     fontFamily: BODY_FONT,
@@ -2004,7 +1958,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#9b2335',
+    borderColor: COLOURS.primaryButton,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2012,7 +1966,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   secondaryButtonText: {
-    color: '#9b2335',
+    color: COLOURS.primaryButton,
     fontSize: 16,
     fontWeight: '400',
     fontFamily: BODY_FONT,
@@ -2024,7 +1978,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#9b2335',
+    borderColor: COLOURS.primaryButton,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2037,7 +1991,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#c8a882',
+    borderColor: COLOURS.titleAccent,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2045,14 +1999,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   flagButtonText: {
-    color: '#9b2335',
+    color: COLOURS.primaryButton,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
   shareButtonText: {
-    color: '#c8a882',
+    color: COLOURS.titleAccent,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
@@ -2071,7 +2025,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   carouselArrowLabel: {
-    color: '#c8a882',
+    color: COLOURS.titleAccent,
     fontSize: 16,
   },
   carouselDotsRow: {
@@ -2085,10 +2039,10 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     margin: 3,
-    backgroundColor: '#2a2a2a',
+    backgroundColor: COLOURS.chipBorder,
   },
   carouselDotActive: {
-    backgroundColor: '#7C6F9B',
+    backgroundColor: COLOURS.cardName,
   },
   pressed: {
     opacity: 0.85,

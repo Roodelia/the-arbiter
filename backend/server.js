@@ -3,8 +3,6 @@ require("dotenv").config();
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
 const Anthropic = require("@anthropic-ai/sdk");
 const { VoyageAIClient } = require("voyageai");
 const { createClient } = require("@supabase/supabase-js");
@@ -34,8 +32,6 @@ const shareLimiter = rateLimit({
     return path === "/share/featured";
   },
 });
-
-const FLAGGED_RULINGS_PATH = path.join(__dirname, "flagged_rulings.jsonl");
 
 const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge assistant.
 Your role is to provide accurate, cited rulings for game situations.
@@ -245,6 +241,31 @@ async function fetchCardOracle(cardName) {
   }
 }
 
+function buildOracleBlock(oracleData, { includeStats = false } = {}) {
+  return oracleData
+    .map((c) => {
+      const stats =
+        includeStats && c.power != null && c.toughness != null
+          ? ` (${c.power}/${c.toughness})`
+          : "";
+      const rulingsBlock =
+        c.rulings && c.rulings.length > 0
+          ? "\nOfficial Rulings:\n" + c.rulings.map((r) => `• ${r}`).join("\n")
+          : "";
+      return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
+    })
+    .join("\n\n");
+}
+
+async function fetchAllCardOracle(cards) {
+  const oracleData = [];
+  for (const cardName of cards) {
+    const cardInfo = await fetchCardOracle(cardName);
+    oracleData.push(cardInfo);
+  }
+  return oracleData;
+}
+
 app.post("/categories", async (req, res) => {
   const { cards } = req.body || {};
 
@@ -255,26 +276,12 @@ app.post("/categories", async (req, res) => {
   }
 
   try {
-    const oracleData = [];
-    for (const cardName of cards) {
-      const cardInfo = await fetchCardOracle(cardName);
-      oracleData.push(cardInfo);
-    }
+    const oracleData = await fetchAllCardOracle(cards);
 
     const systemPrompt =
       "You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant interaction categories a player might want to ask about. Respond ONLY with a valid JSON array of 3-5 short category label strings. No preamble, no markdown, just the raw JSON array.";
 
-    const oracleBlock = oracleData
-      .map((c) => {
-        const rulingsBlock =
-          c.rulings && c.rulings.length > 0
-            ? "\nOfficial Rulings:\n" +
-              c.rulings.map((r) => `• ${r}`).join("\n")
-            : "";
-
-        return `${c.name}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
-      })
-      .join("\n\n");
+    const oracleBlock = buildOracleBlock(oracleData, { includeStats: false });
 
     const userContent = `Here are the cards and their oracle texts:\n\n${oracleBlock}\n\nReturn only a JSON array of 3-5 short category labels.`;
 
@@ -323,7 +330,6 @@ app.post("/categories", async (req, res) => {
 });
 
 app.post("/ruling", async (req, res) => {
-  const clientIp = getClientIp(req);
   const { cards, situation, category } = req.body || {};
 
   if (!Array.isArray(cards) || cards.length === 0) {
@@ -333,23 +339,9 @@ app.post("/ruling", async (req, res) => {
   }
 
   try {
-    const oracleData = [];
-    for (const cardName of cards) {
-      const cardInfo = await fetchCardOracle(cardName);
-      oracleData.push(cardInfo);
-    }
+    const oracleData = await fetchAllCardOracle(cards);
 
-    const oracleBlock = oracleData
-      .map((c) => {
-        const stats = c.power != null ? ` (${c.power}/${c.toughness})` : '';
-        const rulingsBlock =
-          c.rulings && c.rulings.length > 0
-            ? "\nOfficial Rulings:\n" +
-              c.rulings.map((r) => `• ${r}`).join("\n")
-            : "";
-        return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
-      })
-      .join("\n\n");
+    const oracleBlock = buildOracleBlock(oracleData, { includeStats: true });
 
     const keywords = oracleData
       .map((c) => `${c.name} ${c.type_line} ${c.oracle_text}`)
@@ -385,12 +377,6 @@ app.post("/ruling", async (req, res) => {
       console.error("Supabase match_rules error:", supabaseError);
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
-
-    console.log("RAG MATCHES:", JSON.stringify(matches?.map(m => ({
-      rule: m.rule_number || m.rule,
-      text: (m.rule_text || m.text || "").substring(0, 100),
-      similarity: m.similarity
-    })), null, 2));
 
     const crChunks =
       matches && Array.isArray(matches)
@@ -508,7 +494,7 @@ ${contextSection}`;
       cr_version: CR_VERSION,
     });
   } catch (err) {
-    console.error("Error in /ruling handler:", err, { clientIp });
+    console.error("Error in /ruling handler:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
@@ -563,40 +549,6 @@ app.post("/log", async (req, res) => {
     return res.json({ success: true, id: data.id });
   } catch (err) {
     console.error("Error in /log handler:", err);
-    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
-  }
-});
-
-app.post("/flag", async (req, res) => {
-  const { cards, category, situation, ruling, explanation, rules_cited, reason } =
-    req.body || {};
-
-  if (!Array.isArray(cards) || cards.length === 0) {
-    return res.status(400).json({ error: "cards must be a non-empty string array" });
-  }
-  if (!ruling || typeof ruling !== "string") {
-    return res.status(400).json({ error: "ruling must be a non-empty string" });
-  }
-
-  try {
-    const id = crypto.randomUUID();
-    const record = {
-      id,
-      timestamp: new Date().toISOString(),
-      cards,
-      ...(category !== undefined && { category }),
-      ...(situation !== undefined && { situation }),
-      ruling,
-      explanation: explanation ?? "",
-      rules_cited: Array.isArray(rules_cited) ? rules_cited : [],
-      ...(reason !== undefined && { reason }),
-    };
-
-    fs.appendFileSync(FLAGGED_RULINGS_PATH, JSON.stringify(record) + "\n", "utf8");
-
-    return res.json({ success: true, id });
-  } catch (err) {
-    console.error("Error in /flag handler:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });

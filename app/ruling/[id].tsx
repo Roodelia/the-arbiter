@@ -12,25 +12,10 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE } from '@/constants/theme';
+import { fetchCardImageUri } from '@/utils/scryfall';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-
-const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
-
-const COLOURS = {
-  background: '#000000',
-  surface: '#111111',
-  titleAccent: '#c8a882',
-  primaryButton: '#9b2335',
-  chipUnselected: '#111111',
-  cardName: '#7C6F9B',
-  rulingText: '#93c572',
-  text: '#f0f0f0',
-  textMuted: '#a0a0a0',
-  border: '#1e1e1e',
-} as const;
-
-const BODY_FONT = 'sans-serif';
 
 type SharedRulingRow = {
   id: string;
@@ -146,25 +131,6 @@ export default function SharedRulingScreen() {
   imageUriCacheRef.current = imageUriCache;
   const [activeCardPopup, setActiveCardPopup] = useState<string | null>(null);
 
-  const fetchCardImageUri = useCallback(async (cardName: string) => {
-    try {
-      const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(
-        cardName
-      )}`;
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return (
-        data.image_uris?.normal ||
-        data.image_uris?.large ||
-        data.card_faces?.[0]?.image_uris?.normal ||
-        null
-      );
-    } catch {
-      return null;
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -231,7 +197,7 @@ export default function SharedRulingScreen() {
         return { ...prev, [name]: uri };
       });
     });
-  }, [activeCardPopup, fetchCardImageUri]);
+  }, [activeCardPopup]);
 
   const cardNames = ruling ? normalizeCardNames(ruling.cards) : [];
   const rulesCited = ruling ? normalizeRulesCited(ruling.rules_cited) : [];
@@ -481,7 +447,7 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   sharedTagline: {
-    color: '#a0a0a0',
+    color: COLOURS.textMuted,
     fontSize: 14,
     fontFamily: 'serif',
     textAlign: 'center',
@@ -559,7 +525,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   sectionLabel: {
-    color: '#585858',
+    color: COLOURS.sectionLabel,
     fontSize: 10,
     fontWeight: '600',
     marginBottom: 8,
@@ -582,7 +548,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#7C6F9B',
+    borderColor: COLOURS.cardName,
     backgroundColor: COLOURS.chipUnselected,
     justifyContent: 'center',
     maxWidth: '100%',
@@ -591,7 +557,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   chipText: {
-    color: '#7C6F9B',
+    color: COLOURS.cardName,
     fontWeight: '500',
     fontFamily: BODY_FONT,
     fontSize: 14,
@@ -602,21 +568,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
-    backgroundColor: '#111111',
+    borderColor: COLOURS.chipBorder,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   categoryChipSelected: {
-    backgroundColor: '#c8a882',
-    borderColor: '#c8a882',
+    backgroundColor: COLOURS.titleAccent,
+    borderColor: COLOURS.titleAccent,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
     fontSize: 14,
   },
   categoryChipTextSelected: {
-    color: '#111111',
+    color: COLOURS.chipUnselected,
     fontWeight: '700',
   },
   situationBlock: {
@@ -643,7 +609,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   explanationText: {
-    color: '#f0f0f0',
+    color: COLOURS.text,
     fontSize: 14,
     lineHeight: 22,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
@@ -667,20 +633,20 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#c8a882',
-    backgroundColor: '#1a1200',
+    borderColor: COLOURS.rulesTag,
+    backgroundColor: COLOURS.tagBackground,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   ruleTagText: {
-    color: '#c8a882',
+    color: COLOURS.rulesTag,
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
   },
   crVersionText: {
     marginTop: 14,
-    color: '#a0a0a0',
+    color: COLOURS.textMuted,
     fontSize: 12,
     fontFamily: BODY_FONT,
     textAlign: 'right',

@@ -49,14 +49,7 @@ POST /ruling
   - Fetches Scryfall oracle text + official WotC rulings per card
   - Embeds query with Voyage AI, retrieves top 8 CR chunks from Supabase (match_rules)
   - Calls Claude with retrieved CR context + oracle text + official rulings
-  - Client IP captured for error logging (X-Forwarded-For / req.ip; trust proxy enabled)
-  - Returns: { ruling, explanation, rules_cited, oracle_referenced }
-
-POST /flag
-  - Input: { cards, category?, situation?, ruling, explanation,
-             rules_cited, reason? }
-  - Appends flag record to flagged_rulings.jsonl
-  - Returns: { success: true, id }
+  - Returns: { ruling, explanation, rules_cited, oracle_referenced, cr_version }
 
 POST /log
   - Input: { session_id, case_id, cards, selected_category?,
@@ -72,6 +65,12 @@ POST /share
   - Inserts into Supabase shared_rulings table
   - Returns: { success: true, id, url }
 
+GET /share/featured
+  - Reads featured shared rulings where featured = true
+  - Ordered by created_at descending, limited to 5
+  - Returns: Shared ruling array
+  - No rate limiting on this endpoint
+
 GET /share/:id
   - Looks up shared ruling by ID from shared_rulings table
   - Returns: { id, cards, category, situation, ruling, explanation, rules_cited, created_at }
@@ -85,7 +84,7 @@ GET /share/:id
 ## Two-Call Flow
 1. Player adds 1+ cards → app auto-calls /categories → displays chips
 2. Player optionally taps a chip and/or types a situation
-3. Player taps "Get Verdict" → calls /ruling → displays result
+3. Player taps "Get Verdict" (Step 2) → calls /ruling → displays result
 
 ## Hybrid Situation Approach
 - Cards only → app deduces all relevant interactions (deduction mode)
@@ -103,28 +102,30 @@ CARD ORACLE TEXT REFERENCED: [relevant card text]
 ## Three-Step UX Flow
 Step 1 — Specify Cards
   - Card search input with Scryfall autocomplete
-  - Selected cards shown as cinnamon buff chips (removable)
+  - Selected cards shown as lavender steel chips (removable)
   - Card image carousel (full width, swipeable, max 400px on desktop)
   - Most recently added card shown in carousel
-  - Max 6 cards
-  - "Present your case" button (enabled at 1+ cards)
+  - Max 4 cards
+  - "Request Verdict" button (enabled at 1+ cards)
+  - Optional "Featured Rulings" section below action button (if available)
 
 Step 2 — Select Context
   - Selected cards shown (removable)
   - Auto-fetches /categories on entry (1+ cards)
-  - Category chips (multi-select; selected chips pistachio green / dark text)
+  - Category chips (multi-select; selected chips cinnamon buff / dark text)
   - Optional situation text input
   - Back (flex:1) + Get Verdict (flex:3) buttons
 
 Step 3 — View Verdict
   - Ruling card: RULING in pistachio green, EXPLANATION as bullets, RULES CITED as tappable tags (native alert with full line)
-  - "Court Adjourned" block: Back (step 2) + "Present Another Case" (reset cards, step 1)
-  - "Share this ruling" (cinnamon buff border; Web Share / clipboard; shows Sharing… / ✓ Link copied!)
-  - "Appeal this ruling" (etruscan red border); Appealing… while posting /flag
-  - Flag flow: immediate log on tap → modal for optional reason → confirm
+  - Actions below divider:
+    - Row 1: "Share this ruling" (full-width pistachio fill; Sharing… / ✓ Link copied!)
+    - Row 2: "Present Another Case" (full-width outlined lavender steel)
+    - Row 3: Back (flex:1) + "Appeal this ruling" (flex:3, etruscan red outline)
+  - Flag flow: immediate `logCase` on tap → modal for optional reason → confirm
 
 ## Button Labels
-- Step 1 proceed: "Present your case"
+- Step 1 proceed: "Request Verdict"
 - Step 2 back: "Back"
 - Step 2 confirm: "Get Verdict"
 - Step 3 back (to context): "Back"
@@ -134,7 +135,7 @@ Step 3 — View Verdict
 
 ## Usage Logging (Supabase cases table)
 Logged across the flow (same case_id, upserted):
-1. On "Present your case" tap → cards only
+1. On "Request Verdict" tap (Step 1) → cards only
 2. On "Get Verdict" tap → cards + category + situation
 3. On ruling received → full case including verdict
 4. On flag → flagged: true + flag_reason
@@ -152,6 +153,7 @@ Images are never stored — only card names.
 ## Rate Limiting
 - 60 requests per hour per IP address
 - Applies to /categories, /ruling, /log, and /share endpoints
+- Exception: GET /share/featured is read-only and not rate-limited
 - 429 response shows friendly message in UI
 
 ## Colour Palette
@@ -175,11 +177,8 @@ Images are never stored — only card names.
 - Palatino family used only in SVG logo
 
 ## Logo
-- SVG text logo: "ARBITER" in all caps
-- Font: Palatino Linotype / Palatino / serif
-- Gold gradient: #c8a882 → #e8c9a0 → #c8a882 → #9a7a58
-- Centred, letter-spacing 12, no decorative elements
-- File: assets/manajudge_logo.svg
+- Primary in-app title asset: `assets/images/manajudge_title.png` (used in main and shared pages)
+- Legacy SVG wordmark file retained: `assets/images/manajudge_logo.svg`
 
 ## UI Requirements
 - Dark theme — players use this in low-light table conditions
@@ -203,7 +202,8 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - app/+html.tsx — web HTML wrapper (viewport, overscroll, analytics)
 - app/_layout.tsx — Expo Router layout (headerShown: false)
 - backend/server.js — Express backend (all API endpoints)
-- backend/flagged_rulings.jsonl — flagged ruling log
+- constants/theme.ts — shared colours/fonts/error constant
+- utils/scryfall.ts — shared `fetchCardImageUri` helper
 - scripts/embed_rules.py — CR download, chunk (section-prefixed text), embed, upload
 - scripts/mtg_judge_test.py — Python test suite for the ruling engine
 - CLAUDE.md — this file
