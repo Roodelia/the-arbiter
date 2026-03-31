@@ -3,10 +3,10 @@ description:
 alwaysApply: true
 ---
 
-# The Arbiter — Project Context
+# ManaJudge — Project Context
 
 ## App Name
-The Arbiter
+ManaJudge
 
 ## What This App Is
 An AI-powered Magic: The Gathering rules judge companion. Players input
@@ -27,8 +27,8 @@ Casual MTG players who encounter rules disputes during games.
 - Analytics: Vercel Analytics
 
 ## Hosting
-- Frontend: Vercel (https://the-arbiter-steel.vercel.app)
-- Backend: Railway (https://the-arbiter-production.up.railway.app)
+- Frontend: Vercel (https://manajudge.com)
+- Backend: Railway (https://manajudge-production.up.railway.app)
 - Database: Supabase
 
 ## Architecture
@@ -159,11 +159,14 @@ Images are never stored — only card names.
 - Surface: #111111 (dark charcoal)
 - Border: #1e1e1e (subtle, near-invisible)
 - Title accent (cinnamon buff): #c8a882
+- Lavender steel: #7C6F9B
 - Primary buttons (etruscan red): #9b2335
-- Selected chips (pistachio green): #93c572
-- Selected chip text: #111111 (dark, for contrast on green)
+- Selected category chips (cinnamon buff): #c8a882
+- Selected category chip text: #111111 (dark, for contrast on buff)
+- Share primary button fill (pistachio green): #93c572
+- Share primary button text: #111111
 - RULING headline (pistachio green): #93c572
-- Card name chips (cinnamon buff): #c8a882
+- Card chips border/text and carousel active dot (lavender steel): #7C6F9B
 - Rules cited tags (cinnamon buff): #c8a882
 - Small highlights (etruscan red): #9b2335
 - Text: #f0f0f0
@@ -176,7 +179,7 @@ Images are never stored — only card names.
 - Font: Palatino Linotype / Palatino / serif
 - Gold gradient: #c8a882 → #e8c9a0 → #c8a882 → #9a7a58
 - Centred, letter-spacing 12, no decorative elements
-- File: assets/arbiter_logo.svg
+- File: assets/manajudge_logo.svg
 
 ## UI Requirements
 - Dark theme — players use this in low-light table conditions

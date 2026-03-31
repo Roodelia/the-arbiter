@@ -1,3 +1,5 @@
+import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,9 +19,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ArbiterLogo } from '@/components/arbiter-logo';
-import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
 
 type ScryfallAutocompleteResponse = {
   data: string[];
@@ -35,9 +34,9 @@ type ShareRulingResponse = {
 };
 
 /** Production web app origin when building share links on iOS/Android. */
-const SHARE_APP_ORIGIN_NATIVE = 'https://the-arbiter-steel.vercel.app';
+const SHARE_APP_ORIGIN_NATIVE = 'https://manajudge.com';
 
-const SHARE_RULING_TITLE = "Arbiter's verdict for MTG";
+const SHARE_RULING_TITLE = "ManaJudge's verdict for MTG";
 
 function buildShareRulingUrl(shareId: string): string {
   const origin =
@@ -114,6 +113,7 @@ async function presentRulingShare(
   await Share.share({
     title: SHARE_RULING_TITLE,
     message: text,
+    url,
   });
   return undefined;
 }
@@ -131,10 +131,6 @@ type SelectedCard = {
   image_uri: string | null;
 };
 
-function CardName({ name }: { name: string }) {
-  return <Text style={styles.cardNameText}>{name}</Text>;
-}
-
 const MAX_CARDS = 4;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
 
@@ -147,7 +143,7 @@ const NO_CATEGORIES_MESSAGE =
   "Couldn't load interaction categories. You can still describe your situation below and get a verdict.";
 
 const NO_RULING_MESSAGE =
-  "The Arbiter couldn't reach a verdict. Please try again or rephrase your situation.";
+  "ManaJudge couldn't reach a verdict. Please try again or rephrase your situation.";
 
 const COLOURS = {
   background: '#000000',
@@ -157,7 +153,7 @@ const COLOURS = {
   highlight: '#9b2335',
   chipSelected: '#93c572',
   chipUnselected: '#111111',
-  cardName: '#c8a882',
+  cardName: '#7C6F9B',
   rulesTag: '#c8a882',
   rulingText: '#93c572',
   text: '#f0f0f0',
@@ -887,17 +883,18 @@ export default function Index() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
         directionalLockEnabled={true}>
-        <ArbiterLogo
-          width={280}
-          height={41}
-          style={{ alignSelf: 'center', marginVertical: 10 }}
+        <Image
+          source={require('../assets/images/manajudge_title.png')}
+          style={{ width: '100%', height: 60, alignSelf: 'center', marginVertical: 10 }}
+          resizeMode="contain"
         />
 
       {step === 1 ? (
         <>
           <Text style={styles.step1Tagline}>
-            Demystifying card interactions for Magic: The Gathering
+            Pre-Stack Clarity for Magic: The Gathering
           </Text>
+          <View style={styles.refineDivider} />
           <View style={styles.section}>
             <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
             {selectedCards.length < MAX_CARDS ? (
@@ -931,7 +928,7 @@ export default function Index() {
                       pressed && styles.pressed,
                     ]}>
                     <Text style={styles.suggestionText}>
-                      <CardName name={s} />
+                      {s}
                     </Text>
                   </Pressable>
                 ))}
@@ -950,10 +947,10 @@ export default function Index() {
                   <Pressable
                     key={card.name}
                     onPress={() => removeCard(card.name)}
-                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
-                    <Text style={styles.chipText} numberOfLines={1}>
-                      <CardName name={card.name} /> {'  '}
-                      <Text style={styles.removeMark}>×</Text>
+                    style={({ pressed }) => [styles.cardChip, pressed && styles.pressed]}>
+                    <Text style={styles.cardChipText} numberOfLines={1}>
+                      {card.name} {'  '}
+                      <Text style={styles.cardChipRemoveMark}>×</Text>
                     </Text>
                   </Pressable>
                 ))}
@@ -1032,10 +1029,6 @@ export default function Index() {
                     ))}
                   </View>
                 ) : null}
-
-                <Text style={styles.carouselCardName}>
-                  {selectedCards[cardIndex]?.name ?? ''}
-                </Text>
               </View>
             ) : null}
           </View>
@@ -1106,10 +1099,10 @@ export default function Index() {
                 <Pressable
                   key={card.name}
                   onPress={() => removeCard(card.name)}
-                  style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
-                  <Text style={styles.chipText} numberOfLines={1}>
-                    <CardName name={card.name} /> {'  '}
-                    <Text style={styles.removeMark}>×</Text>
+                  style={({ pressed }) => [styles.cardChip, pressed && styles.pressed]}>
+                  <Text style={styles.cardChipText} numberOfLines={1}>
+                    {card.name} {'  '}
+                    <Text style={styles.cardChipRemoveMark}>×</Text>
                   </Text>
                 </Pressable>
               ))}
@@ -1180,7 +1173,7 @@ export default function Index() {
                 }}
                 onPress={goToStep1}
               >
-                <Text style={{ color: '#a0a0a0', fontSize: 15 }}>Back</Text>
+                <Text style={{ color: '#a0a0a0', fontSize: 16 }}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{
@@ -1203,7 +1196,7 @@ export default function Index() {
                   <Text
                     style={{
                       color: '#f0f0f0',
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: '700',
                     }}>
                     Get Verdict
@@ -1232,9 +1225,9 @@ export default function Index() {
                       accessibilityRole="button"
                       accessibilityLabel={`Show card image for ${card.name}`}
                       onPress={() => setActiveStep3Card(card)}
-                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
-                      <Text style={styles.chipText} numberOfLines={1}>
-                        <CardName name={card.name} />
+                      style={({ pressed }) => [styles.cardChip, pressed && styles.pressed]}>
+                      <Text style={styles.cardChipText} numberOfLines={1}>
+                        {card.name}
                       </Text>
                     </Pressable>
                   ))}
@@ -1246,7 +1239,7 @@ export default function Index() {
                 onLayout={(e) => {
                   rulingCardScrollYRef.current = e.nativeEvent.layout.y;
                 }}>
-                <Text style={styles.stepLabel}>Step 3: Receive Verdict</Text>
+                <Text style={styles.stepLabel}>Step 3: Verdict</Text>
                 <Text style={[styles.sectionLabel, { marginTop: 0 }]}>RULING</Text>
                 <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
 
@@ -1304,77 +1297,77 @@ export default function Index() {
               <View style={styles.refineDivider} />
 
               <View style={styles.section}>
-                <View style={{ width: '100%', gap: 8 }}>
+                <View style={styles.step3ActionStack}>
                 {refineError ? (
                   <Text style={styles.refineErrorText}>{refineError}</Text>
                 ) : null}
-
-                <View style={{ flexDirection: 'row', width: '100%', gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={goToStep2}
-                    style={[
-                      styles.tertiaryButton,
-                      { flex: 1, marginTop: 0, height: 52, alignItems: 'center', justifyContent: 'center' },
-                    ]}>
-                    <Text style={styles.tertiaryButtonText}>Back</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedCards([]);
-                      setCardIndex(0);
-                      caseId.current = generateId();
-                      goToStep1();
-                    }}
-                    style={[
-                      styles.primaryButton,
-                      {
-                        flex: 3,
-                        marginTop: 0,
-                        backgroundColor: COLOURS.chipSelected,
-                        height: 52,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.primaryButtonText,
-                        { color: COLOURS.chipUnselected },
-                      ]}>
-                      Present Another Case
-                    </Text>
-                  </TouchableOpacity>
-                </View>
 
                 <TouchableOpacity
                   onPress={onShareRuling}
                   disabled={sharing}
                   style={[
                     styles.shareButton,
+                    styles.step3SharePrimaryButton,
                     sharing && styles.primaryButtonDisabled,
                   ]}>
                   {sharing ? (
                     <View style={styles.loadingRow}>
-                      <ActivityIndicator color="#c8a882" />
-                      <Text style={styles.shareButtonText}>Sharing…</Text>
+                      <ActivityIndicator color="#111111" />
+                      <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                        Sharing…
+                      </Text>
                     </View>
                   ) : shareCopied ? (
-                    <Text style={styles.shareButtonText}>✓ Link copied!</Text>
+                    <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                      ✓ Link copied!
+                    </Text>
                   ) : (
-                    <Text style={styles.shareButtonText}>Share this ruling</Text>
+                    <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                      Share this ruling
+                    </Text>
                   )}
                 </TouchableOpacity>
-                {shareError ? <Text style={styles.flagErrorText}>{shareError}</Text> : null}
 
-                {flagged ? (
-                  <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
-                ) : (
-                  <>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCards([]);
+                    setCardIndex(0);
+                    caseId.current = generateId();
+                    goToStep1();
+                  }}
+                  style={[styles.tertiaryButton, styles.step3ResetButton]}>
+                  <Text style={[styles.tertiaryButtonText, styles.step3ResetButtonText]}>
+                    Present another Case
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.step3ActionRow}>
+                  <TouchableOpacity
+                    onPress={goToStep2}
+                    style={[
+                      styles.tertiaryButton,
+                      {
+                        flex: 1,
+                        marginTop: 0,
+                        height: 52,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      },
+                    ]}>
+                    <Text style={styles.tertiaryButtonText}>Back</Text>
+                  </TouchableOpacity>
+
+                  {flagged ? (
+                    <View style={[styles.step3FlagConfirmationWrap, { flex: 3 }]}>
+                      <Text style={styles.flagConfirmText}>✓ Ruling flagged for review. Thank you.</Text>
+                    </View>
+                  ) : (
                     <TouchableOpacity
                       onPress={onFlag}
                       disabled={flagging}
                       style={[
                         styles.flagButton,
+                        { flex: 3 },
                         flagging && styles.primaryButtonDisabled,
                       ]}>
                       {flagging ? (
@@ -1386,14 +1379,17 @@ export default function Index() {
                         <Text style={styles.flagButtonText}>Appeal this ruling</Text>
                       )}
                     </TouchableOpacity>
-                    {flagError ? <Text style={styles.flagErrorText}>{flagError}</Text> : null}
-                  </>
-                )}
+                  )}
+                </View>
+
+                {shareError ? <Text style={styles.flagErrorText}>{shareError}</Text> : null}
+
+                {flagError ? <Text style={styles.flagErrorText}>{flagError}</Text> : null}
                 </View>
               </View>
             </>
           ) : (
-            <View nativeID="arbiter-helper-verdict" style={styles.helperBox}>
+            <View nativeID="manajudge-helper-verdict" style={styles.helperBox}>
               <Text style={[styles.helperText, { color: COLOURS.textMuted }]}>
                 No ruling yet. Go back and request one.
               </Text>
@@ -1501,7 +1497,7 @@ const styles = StyleSheet.create({
     minHeight: '100%',
   },
   title: {
-    fontSize: 32,
+    fontSize: 16,
     fontWeight: '700',
     color: COLOURS.titleAccent,
     marginBottom: 16,
@@ -1562,7 +1558,7 @@ const styles = StyleSheet.create({
   },
   featuredRulingPreview: {
     color: COLOURS.textMuted,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: BODY_FONT,
     lineHeight: 18,
   },
@@ -1619,7 +1615,7 @@ const styles = StyleSheet.create({
   },
   flagModalSubtitle: {
     color: '#a0a0a0',
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 8,
     fontFamily: BODY_FONT,
   },
@@ -1668,7 +1664,7 @@ const styles = StyleSheet.create({
   },
   cardModalFallbackText: {
     color: COLOURS.textMuted,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
@@ -1689,7 +1685,7 @@ const styles = StyleSheet.create({
   flagErrorText: {
     marginTop: 8,
     color: COLOURS.highlight,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: BODY_FONT,
     fontWeight: '600',
     textAlign: 'center',
@@ -1730,35 +1726,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: BODY_FONT,
   },
-  cardNameText: {
-    color: COLOURS.cardName,
-    fontWeight: '500',
-    fontFamily: BODY_FONT,
-    fontSize: 13,
-  },
   chipsRow: {
-    marginTop: 8,
+    marginTop: 4,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
-  chip: {
+  cardChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#c8a882',
+    borderColor: '#7C6F9B',
     backgroundColor: COLOURS.chipUnselected,
     justifyContent: 'center',
     maxWidth: '100%',
   },
-  chipText: {
-    color: '#c8a882',
+  cardChipText: {
+    color: COLOURS.cardName,
     fontWeight: '500',
     fontFamily: BODY_FONT,
-    fontSize: 13,
+    fontSize: 14,
   },
-  removeMark: {
+  cardChipRemoveMark: {
     color: '#9b2335',
     fontWeight: 'bold',
     fontFamily: BODY_FONT,
@@ -1774,12 +1764,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   categoryChipSelected: {
-    backgroundColor: '#93c572',
-    borderColor: '#93c572',
+    backgroundColor: '#c8a882',
+    borderColor: '#c8a882',
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
-    fontSize: 13,
+    fontSize: 14,
   },
   primaryButton: {
     minHeight: 52,
@@ -1798,7 +1788,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: COLOURS.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: BODY_FONT,
@@ -1823,7 +1813,7 @@ const styles = StyleSheet.create({
   },
   tertiaryButtonText: {
     color: COLOURS.textMuted,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '400',
     fontFamily: BODY_FONT,
   },
@@ -1839,6 +1829,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  step3ActionStack: {
+    width: '100%',
+    gap: 8,
+  },
+  step3ActionRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+  },
+  step3SharePrimaryButton: {
+    marginTop: 0,
+    width: '100%',
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLOURS.chipSelected,
+    borderColor: COLOURS.chipSelected,
+  },
+  step3SharePrimaryButtonText: {
+    color: COLOURS.chipUnselected,
+  },
+  step3ResetButton: {
+    marginTop: 0,
+    width: '100%',
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderColor: '#7C6F9B',
+    borderWidth: 1,
+  },
+  step3ResetButtonText: {
+    color: '#7C6F9B',
+  },
+  step3FlagConfirmationWrap: {
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
   },
   loadingText: {
     color: COLOURS.textMuted,
@@ -1865,7 +1898,7 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
     fontFamily: 'serif',
     textAlign: 'left',
-    fontSize: 12,
+    fontSize: 14,
     marginTop: 8,
   },
   helperText: {
@@ -1948,14 +1981,14 @@ const styles = StyleSheet.create({
   },
   refineButtonTextEnabled: {
     color: COLOURS.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: BODY_FONT,
   },
   refineButtonTextDisabled: {
     color: '#3a3a3a',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: BODY_FONT,
@@ -1980,7 +2013,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#9b2335',
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '400',
     fontFamily: BODY_FONT,
     textAlign: 'center',
@@ -2013,14 +2046,14 @@ const styles = StyleSheet.create({
   },
   flagButtonText: {
     color: '#9b2335',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
   shareButtonText: {
     color: '#c8a882',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',
@@ -2039,7 +2072,7 @@ const styles = StyleSheet.create({
   },
   carouselArrowLabel: {
     color: '#c8a882',
-    fontSize: 24,
+    fontSize: 16,
   },
   carouselDotsRow: {
     flexDirection: 'row',
@@ -2055,15 +2088,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a2a',
   },
   carouselDotActive: {
-    backgroundColor: '#c8a882',
-  },
-  carouselCardName: {
-    color: '#c8a882',
-    fontSize: 13,
-    textAlign: 'center',
-    letterSpacing: 1,
-    marginTop: 6,
-    fontFamily: BODY_FONT,
+    backgroundColor: '#7C6F9B',
   },
   pressed: {
     opacity: 0.85,

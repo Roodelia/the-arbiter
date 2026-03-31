@@ -6,7 +6,7 @@ import { SvgXml } from 'react-native-svg';
  * Per-instance gradient id so fill="url(#…)" never clashes on web when multiple
  * routes/screens mount (Expo Router can keep trees alive; duplicate SVG ids break paints).
  */
-function arbiterLogoXml(gradientId: string): string {
+function manajudgeLogoXml(gradientId: string): string {
   return `
 <svg width="800" height="118" viewBox="0 62 800 118" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -22,27 +22,27 @@ function arbiterLogoXml(gradientId: string): string {
     x="400"
     y="155"
     font-family="'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, serif"
-    font-size="110"
+    font-size="94"
     font-weight="700"
     fill="url(#${gradientId})"
     text-anchor="middle"
-    letter-spacing="12"
-  >ARBITER</text>
+    letter-spacing="7"
+  >MANAJUDGE</text>
 </svg>
 `.trim();
 }
 
-type ArbiterLogoProps = {
+type ManaJudgeLogoProps = {
   width?: number;
   height?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function ArbiterLogo({ width = 280, height = 41, style }: ArbiterLogoProps) {
+export function ManaJudgeLogo({ width = 280, height = 41, style }: ManaJudgeLogoProps) {
   const idRef = useRef<string | null>(null);
   if (idRef.current == null) {
     idRef.current = `ag${Math.random().toString(36).slice(2, 11)}`;
   }
-  const xml = useMemo(() => arbiterLogoXml(idRef.current!), []);
+  const xml = useMemo(() => manajudgeLogoXml(idRef.current!), []);
   return <SvgXml xml={xml} width={width} height={height} style={style} />;
 }

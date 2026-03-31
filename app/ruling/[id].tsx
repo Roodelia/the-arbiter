@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArbiterLogo } from '@/components/arbiter-logo';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -24,7 +23,7 @@ const COLOURS = {
   titleAccent: '#c8a882',
   primaryButton: '#9b2335',
   chipUnselected: '#111111',
-  cardName: '#c8a882',
+  cardName: '#7C6F9B',
   rulingText: '#93c572',
   text: '#f0f0f0',
   textMuted: '#a0a0a0',
@@ -260,14 +259,21 @@ export default function SharedRulingScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         directionalLockEnabled>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go to The Arbiter home"
-          onPress={() => router.push('/')}>
-          <ArbiterLogo width={280} height={41} style={styles.logo} />
-        </Pressable>
+        <View style={styles.logoImageWrap}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go to ManaJudge home"
+            style={styles.logoPressable}
+            onPress={() => router.push('/')}>
+            <Image
+              source={require('../../assets/images/manajudge_title.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </View>
         <Text style={styles.sharedTagline}>
-          Demystifying card interactions for Magic: The Gathering
+          Pre-Stack Clarity for Magic: The Gathering
         </Text>
 
         {loading ? (
@@ -288,7 +294,7 @@ export default function SharedRulingScreen() {
         {!loading && ruling && !notFound && !errorMessage ? (
           <>
             <View style={styles.resultCard}>
-              <Text style={styles.sectionLabel}>Cards</Text>
+              <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Cards</Text>
 
               {cardNames.length > 0 ? (
                 <View style={styles.chipsRow}>
@@ -313,14 +319,14 @@ export default function SharedRulingScreen() {
 
               {ruling.situation?.trim() || categoryLabels.length > 0 ? (
                 <View style={styles.situationBlock}>
-                  <Text style={styles.resultHeading}>SITUATION</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION</Text>
                   {ruling.situation?.trim() ? (
                     <Text style={styles.situationText}>
                       {ruling.situation.trim()}
                     </Text>
                   ) : null}
                   {categoryLabels.length > 0 ? (
-                    <View style={[styles.chipsRow, styles.situationChipsRow]}>
+                    <View style={styles.chipsRow}>
                       {categoryLabels.map((label, idx) => (
                         <View
                           key={`${label}-${idx}`}
@@ -343,12 +349,12 @@ export default function SharedRulingScreen() {
                 </View>
               ) : null}
 
-              <Text style={[styles.resultHeading, styles.rulingHeadingSpacing]}>
+              <Text style={styles.sectionLabel}>
                 RULING
               </Text>
               <Text style={styles.rulingText}>{ruling.ruling}</Text>
 
-              <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
+              <Text style={styles.sectionLabel}>
                 EXPLANATION
               </Text>
               {(() => {
@@ -373,7 +379,7 @@ export default function SharedRulingScreen() {
                 ));
               })()}
 
-              <Text style={[styles.resultHeading, styles.resultHeadingSpacer]}>
+              <Text style={styles.sectionLabel}>
                 RULES CITED
               </Text>
               <View style={styles.rulesRow}>
@@ -396,7 +402,7 @@ export default function SharedRulingScreen() {
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Ask the Arbiter</Text>
+              <Text style={styles.primaryButtonText}>Ask ManaJudge</Text>
             </Pressable>
           </>
         ) : null}
@@ -461,7 +467,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     overflow: 'visible',
   },
-  logo: {
+  logoImageWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  logoPressable: {
+    width: '100%',
+  },
+  logoImage: {
+    width: '100%',
+    height: 60,
     alignSelf: 'center',
     marginVertical: 10,
   },
@@ -529,7 +544,7 @@ const styles = StyleSheet.create({
   },
   cardPopupFallback: {
     color: COLOURS.textMuted,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: BODY_FONT,
     paddingVertical: 20,
     textAlign: 'center',
@@ -548,6 +563,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     marginBottom: 8,
+    marginTop: 14,
     textTransform: 'uppercase',
     letterSpacing: 3,
     fontFamily: BODY_FONT,
@@ -559,9 +575,6 @@ const styles = StyleSheet.create({
     gap: 10,
     overflow: 'visible',
   },
-  situationChipsRow: {
-    marginTop: 10,
-  },
   readOnlyChip: {
     alignSelf: 'flex-start',
     minHeight: 30,
@@ -569,7 +582,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#c8a882',
+    borderColor: '#7C6F9B',
     backgroundColor: COLOURS.chipUnselected,
     justifyContent: 'center',
     maxWidth: '100%',
@@ -578,10 +591,10 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   chipText: {
-    color: '#c8a882',
+    color: '#7C6F9B',
     fontWeight: '500',
     fontFamily: BODY_FONT,
-    fontSize: 13,
+    fontSize: 14,
   },
   categoryChip: {
     minHeight: 30,
@@ -595,12 +608,12 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   categoryChipSelected: {
-    backgroundColor: '#93c572',
-    borderColor: '#93c572',
+    backgroundColor: '#c8a882',
+    borderColor: '#c8a882',
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
-    fontSize: 13,
+    fontSize: 14,
   },
   categoryChipTextSelected: {
     color: '#111111',
@@ -615,20 +628,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     fontFamily: BODY_FONT,
-  },
-  resultHeading: {
-    color: '#585858',
-    fontWeight: '900',
-    letterSpacing: 3,
-    fontSize: 10,
-    fontFamily: BODY_FONT,
-    textTransform: 'uppercase',
-  },
-  rulingHeadingSpacing: {
-    marginTop: 14,
-  },
-  resultHeadingSpacer: {
-    marginTop: 14,
   },
   rulingText: {
     marginTop: 6,
@@ -682,7 +681,7 @@ const styles = StyleSheet.create({
   crVersionText: {
     marginTop: 14,
     color: '#a0a0a0',
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: BODY_FONT,
     textAlign: 'right',
   },
@@ -701,7 +700,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: COLOURS.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 1,
     fontFamily: BODY_FONT,

@@ -5,7 +5,7 @@ export default function Layout() {
   return (
     <>
       <Head>
-        <title>Arbiter</title>
+        <title>ManaJudge</title>
       </Head>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />

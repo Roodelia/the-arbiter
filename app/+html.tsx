@@ -21,8 +21,8 @@ export default function Root({ children }: { children: React.ReactNode }) {
             height: 100%;
           }
           /* RN Web: Step 3 helper box — muted copy (wrappers often set near-white) */
-          #arbiter-helper-verdict,
-          #arbiter-helper-verdict * {
+          #manajudge-helper-verdict,
+          #manajudge-helper-verdict * {
             color: #a0a0a0 !important;
           }
         `}</style>

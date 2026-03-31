@@ -131,7 +131,7 @@ CRITICAL INTERACTION RULES:
 const GENERIC_SERVER_ERROR_MESSAGE =
   "Something went wrong. Please try again.";
 
-const SHARE_APP_BASE = "https://the-arbiter-steel.vercel.app";
+const SHARE_APP_BASE = "https://manajudge.com";
 
 function generateShareId() {
   const alphabet =
@@ -166,6 +166,7 @@ app.use(cors({
     'http://localhost:8081',
     'http://192.168.86.27:8081',  
     'https://the-arbiter-production.up.railway.app',
+    'https://manajudge.com',
     'https://the-arbiter-steel.vercel.app'
   ]
 }));
@@ -770,9 +771,9 @@ app.get("/share/:id", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("MTG AI Judge backend is running.");
+  res.send("ManaJudge backend is running.");
 });
 
 app.listen(port, () => {
-  console.log(`MTG AI Judge backend listening on port ${port}`);
+  console.log(`ManaJudge backend listening on port ${port}`);
 });

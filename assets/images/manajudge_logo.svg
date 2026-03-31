@@ -7,20 +7,15 @@
       <stop offset="100%" stop-color="#9a7a58"/>
     </linearGradient>
   </defs>
-
-  <!-- Background (tight viewBox around wordmark for balanced vertical padding) -->
   <rect x="0" y="62" width="800" height="118" fill="#000000"/>
-
-  <!-- Main wordmark — all caps, Palatino -->
   <text
     x="400"
     y="155"
     font-family="'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, serif"
-    font-size="110"
+    font-size="82"
     font-weight="700"
     fill="url(#gold)"
     text-anchor="middle"
-    letter-spacing="12"
-  >ARBITER</text>
-
+    letter-spacing="8"
+  >MANAJUDGE</text>
 </svg>
