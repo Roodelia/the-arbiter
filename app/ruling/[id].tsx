@@ -318,10 +318,8 @@ export default function SharedRulingScreen() {
               ) : null}
             </View>
 
-            <Text style={[styles.sectionLabel, { marginTop: 0 }]}>
-              Verdict
-            </Text>
             <View style={[styles.section, styles.step3RulingSection]}>
+              <Text style={styles.rulingSectionTitle}>VERDICT</Text>
               <Text style={styles.rulingText}>{ruling.ruling}</Text>
             </View>
 
@@ -622,23 +620,33 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   rulingText: {
-    color: COLOURS.text,
-    fontSize: 18,
+    color: COLOURS.brandSoft,
+    fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,
-    fontFamily: TITLE_FONT,
+    fontFamily: BODY_FONT,
   },
   step3RulingSection: {
-    backgroundColor: COLOURS.brandDim,
+    backgroundColor: COLOURS.bgRuling,
     borderWidth: 2,
     borderBottomWidth: 2,
-    borderColor: COLOURS.brandDim,
-    borderBottomColor: COLOURS.brandDim,
-    borderRadius: 4,
+    borderColor: COLOURS.brand,
+    borderBottomColor: COLOURS.brand,
+    borderRadius: 6,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
     marginBottom: 12,
+  },
+  rulingSectionTitle: {
+    color: COLOURS.authority,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: TITLE_FONT,
   },
   explanationRow: {
     flexDirection: 'row',
@@ -684,8 +692,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLOURS.brandSoft,
-    backgroundColor: COLOURS.bgAccent,
+    borderColor: COLOURS.chipBorder,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
   },

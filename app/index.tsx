@@ -1157,12 +1157,12 @@ export default function Index() {
                 </View>
               </View>
 
-              <Text style={styles.stepLabel}>Step 3: Verdict</Text>
               <View
                 style={[styles.section, styles.step3RulingSection]}
                 onLayout={(e) => {
                   rulingCardScrollYRef.current = e.nativeEvent.layout.y;
                 }}>
+                <Text style={styles.rulingSectionTitle}>VERDICT</Text>
                 <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
               </View>
 
@@ -1685,7 +1685,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLOURS.chipBorder,
-    backgroundColor: COLOURS.surface,
+    backgroundColor: COLOURS.bgAccent,
     justifyContent: 'center',
   },
   categoryChipSelected: {
@@ -1777,16 +1777,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   step3RulingSection: {
-    backgroundColor: COLOURS.brandDim,
+    backgroundColor: COLOURS.bgRuling,
     borderWidth: 2,
     borderBottomWidth: 2,
-    borderColor: COLOURS.brandDim,
-    borderBottomColor: COLOURS.brandDim,
-    borderRadius: 4,
+    borderColor: COLOURS.brand,
+    borderBottomColor: COLOURS.brand,
+    borderRadius: 6,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
     marginBottom: 12,
+  },
+  rulingSectionTitle: {
+    color: COLOURS.authority,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 6,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: TITLE_FONT,
   },
   step3FlagConfirmationWrap: {
     width: '100%',
@@ -1834,11 +1844,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rulingText: {
-    color: COLOURS.text,
-    fontSize: 18,
+    color: COLOURS.brandSoft,
+    fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,
-    fontFamily: TITLE_FONT,
+    fontFamily: BODY_FONT,
   },
   explanationText: {
     color: COLOURS.text,
@@ -1873,8 +1883,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLOURS.brandSoft,
-    backgroundColor: COLOURS.bgAccent,
+    borderColor: COLOURS.chipBorder,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
   },

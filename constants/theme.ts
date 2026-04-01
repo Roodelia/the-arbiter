@@ -1,16 +1,19 @@
 export const COLOURS = {
   // Backgrounds
-  background:     '#0b0a1a',   // ink black (page bg)
-  surface:        '#14122b',   // midnight violet (cards, inputs, containers)
-  bgAccent:       '#1C1526',   // warm violet tint (ruling card fill, rule tags, chip accents)
+  background:     '#070611',   // ink black (page bg)
+  surface:        '#0b0a1a',   // midnight violet (cards, inputs, containers)
+  bgRuling:       '#000000',   // warm violet tint (ruling card fill, rule tags, chip accents) #14122b
+  bgAccent:       '#14122b',   //  #25224a
 
   // Brand identity (dark goldenrod ramp)
   brand:          '#a67c2e',   // ruling border, logo, featured titles, carousel arrows
   brandSoft:      '#cbb89d',   // ruling verdict text, carousel dots
   brandDim:       '#7A5B23',   // rule tag border/text
+  brandStrong:    '#9f8f76',   // ruling verdict text
 
   // Actions & emphasis (dark amaranth)
-  action:         '#7a1c2e',   // primary CTAs, appeal button, RULING label, remove marks
+  action:         '#5a1523',   // primary CTAs, appeal button, RULING label, remove marks
+  authority:      '#7a1c2e',   // authority text
 
   // Error feedback
   error:          '#B85C38',   // validation and error states
@@ -22,6 +25,7 @@ export const COLOURS = {
   text:           '#f0f0f0',   // primary text, button text on dark fills
   textSecondary:  '#A0A6B0',   // card chip text, helper text, step labels, tertiary button text
   textMuted:      '#6F7682',   // section labels, chevrons, placeholders
+  textInverted:   '#000000',   // inverted text
 
   // Borders
   border:         '#2a2535',   // container/input/chip borders
