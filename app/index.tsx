@@ -235,6 +235,8 @@ export default function Index() {
   const [refineText, setRefineText] = useState('');
   const [refining, setRefining] = useState(false);
   const [refineError, setRefineError] = useState('');
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
 
   const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const sessionId = useRef(Math.random().toString(36).substring(2)).current;
@@ -275,6 +277,12 @@ export default function Index() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!rulingResult) return;
+    setIsExplanationOpen(false);
+    setIsRulesOpen(false);
+  }, [rulingResult]);
 
   useEffect(() => {
     const base = BACKEND_BASE_URL;
@@ -827,7 +835,10 @@ export default function Index() {
       {step === 1 ? (
         <>
           <Text style={styles.step1Tagline}>
-            Pre-Stack Clarity for Magic: The Gathering
+            Instant rulings for Magic: The Gathering interactions
+          </Text>
+          <Text style={styles.step1UsageCue}>
+            State the cards. Describe the interaction. Get your answers.
           </Text>
           <View style={styles.refineDivider} />
           <View style={styles.section}>
@@ -993,13 +1004,13 @@ export default function Index() {
               </Text>
               {featuredStatus === 'loading' ? (
                 <View style={styles.featuredLoadingWrap}>
-                  <ActivityIndicator color={COLOURS.chipSelected} />
+                  <ActivityIndicator color={COLOURS.confirm} />
                 </View>
               ) : (
                 featuredRulings.map((item) => {
                   const title =
                     featuredRulingTitleFromCards(item.cards) || 'Featured ruling';
-                  const preview = rulingPreviewText(item.ruling, 150);
+                  const preview = rulingPreviewText(item.ruling, 180);
                   return (
                     <Pressable
                       key={item.id}
@@ -1048,7 +1059,7 @@ export default function Index() {
             <Text style={styles.stepLabel}>Step 2: Select interaction and/or describe situation</Text>
             {isCategoriesLoading ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color={COLOURS.chipSelected} />
+                <ActivityIndicator color={COLOURS.confirm} />
                 <Text style={styles.loadingText}>Finding likely interactions…</Text>
               </View>
             ) : null}
@@ -1069,7 +1080,7 @@ export default function Index() {
                       style={[
                         styles.categoryChipText,
                         {
-                          color: selected ? COLOURS.chipUnselected : COLOURS.textMuted,
+                          color: selected ? COLOURS.textSecondary : COLOURS.textSecondary,
                           fontWeight: selected ? '700' : '400',
                         },
                       ]}>
@@ -1112,7 +1123,7 @@ export default function Index() {
                     <Text style={styles.primaryButtonText}>Jury deliberating…</Text>
                   </View>
                 ) : (
-                  <Text style={styles.step2VerdictButtonText}>Get Verdict</Text>
+                  <Text style={styles.primaryButtonText}>Get Verdict</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1146,64 +1157,83 @@ export default function Index() {
                 </View>
               </View>
 
+              <Text style={styles.stepLabel}>Step 3: Verdict</Text>
               <View
-                style={[styles.section, { paddingBottom: 0 }]}
+                style={[styles.section, styles.step3RulingSection]}
                 onLayout={(e) => {
                   rulingCardScrollYRef.current = e.nativeEvent.layout.y;
                 }}>
-                <Text style={styles.stepLabel}>Step 3: Verdict</Text>
-                <Text style={[styles.sectionLabel, { marginTop: 0 }]}>RULING</Text>
                 <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
+              </View>
 
-                <Text style={styles.sectionLabel}>
-                  EXPLANATION
-                </Text>
-                {(() => {
-                  const explanationLines = rulingResult.explanation
-                    .split('\n')
-                    .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
-                    .filter(Boolean);
+              <View style={[styles.section, { paddingBottom: 0 }]}>
+                <Pressable
+                  onPress={() => setIsExplanationOpen((prev) => !prev)}
+                  style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.pressed]}>
+                  <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
+                    EXPLANATION
+                  </Text>
+                  <Text style={styles.collapsibleChevron}>
+                    {isExplanationOpen ? '▾' : '▸'}
+                  </Text>
+                </Pressable>
+                {isExplanationOpen
+                  ? (() => {
+                      const explanationLines = rulingResult.explanation
+                        .split('\n')
+                        .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
+                        .filter(Boolean);
 
-                  return explanationLines.map((line, index) => (
-                    <View
-                      key={index}
-                      style={{
-                        flexDirection: 'row',
-                        marginTop: 0,
-                        marginBottom: 6,
-                        paddingRight: 8,
-                      }}>
-                      <Text
-                        style={[
-                          styles.explanationText,
-                          {
-                            minWidth: 24,
-                            flexShrink: 0,
-                          },
-                        ]}
-                        accessible={false}>
-                        {'\u2022'}
-                      </Text>
-                      <Text style={[styles.explanationText, { flex: 1 }]}>{line}</Text>
-                    </View>
-                  ));
-                })()}
+                      return explanationLines.map((line, index) => (
+                        <View
+                          key={index}
+                          style={{
+                            flexDirection: 'row',
+                            marginTop: 8,
+                            marginBottom: 0,
+                            paddingRight: 8,
+                          }}>
+                          <Text
+                            style={[
+                              styles.explanationText,
+                              {
+                                minWidth: 24,
+                                flexShrink: 0,
+                              },
+                            ]}
+                            accessible={false}>
+                            {'\u2022'}
+                          </Text>
+                          <Text style={[styles.explanationText, { flex: 1 }]}>{line}</Text>
+                        </View>
+                      ));
+                    })()
+                  : null}
 
-                <Text style={styles.sectionLabel}>
-                  RULES CITED
-                </Text>
-                <View style={styles.rulesRow}>
-                  {(rulingResult.rules_cited ?? []).map((r) => (
-                    <Pressable
-                      key={r}
-                      onPress={() => onPressRuleTag(r)}
-                      style={({ pressed }) => [styles.ruleTag, pressed && styles.pressed]}>
-                      <Text style={styles.ruleTagText} numberOfLines={2}>
-                        {r}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <Pressable
+                  onPress={() => setIsRulesOpen((prev) => !prev)}
+                  style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.pressed]}>
+                  <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
+                    RULES CITED
+                  </Text>
+                  <Text style={styles.collapsibleChevron}>
+                    {isRulesOpen ? '▾' : '▸'}
+                  </Text>
+                </Pressable>
+                {isRulesOpen ? (
+                  <View style={styles.rulesRow}>
+                    {(rulingResult.rules_cited ?? []).map((r) => (
+                      <Pressable
+                        key={r}
+                        onPress={() => onPressRuleTag(r)}
+                        style={({ pressed }) => [styles.ruleTag, pressed && styles.pressed]}>
+                        <Text style={styles.ruleTagText} numberOfLines={2}>
+                          {r}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.refineDivider} />
@@ -1219,78 +1249,71 @@ export default function Index() {
                   disabled={sharing}
                   style={[
                     styles.shareButton,
-                    styles.step3SharePrimaryButton,
                     sharing && styles.primaryButtonDisabled,
                   ]}>
                   {sharing ? (
                     <View style={styles.loadingRow}>
-                      <ActivityIndicator color={COLOURS.chipUnselected} />
-                      <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                      <ActivityIndicator color={COLOURS.surface} />
+                      <Text style={styles.shareButtonText}>
                         Sharing…
                       </Text>
                     </View>
                   ) : shareCopied ? (
-                    <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                    <Text style={styles.shareButtonText}>
                       ✓ Link copied!
                     </Text>
                   ) : (
-                    <Text style={[styles.shareButtonText, styles.step3SharePrimaryButtonText]}>
+                    <Text style={styles.shareButtonText}>
                       Share this ruling
                     </Text>
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedCards([]);
-                    setCardIndex(0);
-                    caseId.current = generateId();
-                    goToStep1();
-                  }}
-                  style={[styles.tertiaryButton, styles.step3ResetButton]}>
-                  <Text style={[styles.tertiaryButtonText, styles.step3ResetButtonText]}>
-                    Request another Verdict
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.step3ActionRow}>
+                <View style={styles.step2ActionRow}>
                   <TouchableOpacity
                     onPress={goToStep2}
-                    style={[
-                      styles.tertiaryButton,
-                      {
-                        flex: 1,
-                        marginTop: 0,
-                        height: 52,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      },
-                    ]}>
-                    <Text style={styles.tertiaryButtonText}>Back</Text>
+                    style={styles.step2BackButton}>
+                    <Text style={styles.step2BackButtonText}>Back</Text>
                   </TouchableOpacity>
 
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCards([]);
+                      setCardIndex(0);
+                      caseId.current = generateId();
+                      goToStep1();
+                    }}
+                    style={styles.step2VerdictButton}>
+                    <Text style={styles.primaryButtonText}>
+                      Request another Verdict
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.step3ActionRow}>
+
                   {flagged ? (
-                    <View style={[styles.step3FlagConfirmationWrap, { flex: 3 }]}>
+                    <View style={styles.step3FlagConfirmationWrap}>
                       <Text style={styles.flagConfirmText}>✓ Verdict flagged. Thank you.</Text>
                     </View>
                   ) : (
-                    <TouchableOpacity
+                    <Pressable
                       onPress={onFlag}
                       disabled={flagging}
-                      style={[
-                        styles.flagButton,
-                        { flex: 3 },
+                      style={({ pressed }) => [
+                        styles.flagTextActionWrap,
+                        pressed && styles.pressed,
                         flagging && styles.primaryButtonDisabled,
                       ]}>
                       {flagging ? (
                         <View style={styles.loadingRow}>
-                          <ActivityIndicator color={COLOURS.primaryButton} />
-                          <Text style={styles.flagButtonText}>Appealing…</Text>
+                          <ActivityIndicator color={COLOURS.action} />
+                          <Text style={styles.flagTextAction}>Appealing…</Text>
                         </View>
                       ) : (
-                        <Text style={styles.flagButtonText}>Appeal this ruling</Text>
+                        <Text style={styles.flagTextAction}>Flag this Verdict</Text>
                       )}
-                    </TouchableOpacity>
+                    </Pressable>
                   )}
                 </View>
 
@@ -1411,7 +1434,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLOURS.titleAccent,
+    color: COLOURS.brand,
     marginBottom: 16,
     letterSpacing: 3,
     fontFamily: TITLE_FONT,
@@ -1423,7 +1446,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLOURS.border,
   },
   stepLabel: {
-    color: COLOURS.text,
+    color: COLOURS.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     marginBottom: 8,
@@ -1432,14 +1455,21 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   step1Tagline: {
-    color: COLOURS.textMuted,
+    color: COLOURS.textSecondary,
     fontSize: 14,
     fontFamily: 'serif',
     textAlign: 'center',
     marginBottom: 16,
   },
+  step1UsageCue: {
+    color: COLOURS.text,
+    fontSize: 14,
+    fontFamily: 'sans-serif',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   sectionLabel: {
-    color: COLOURS.sectionLabel,
+    color: COLOURS.textMuted,
     fontWeight: '600',
     letterSpacing: 3,
     fontSize: 10,
@@ -1462,21 +1492,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLOURS.surface,
   },
   featuredRulingTitle: {
-    color: COLOURS.titleAccent,
+    color: COLOURS.brandDim,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: BODY_FONT,
     marginBottom: 6,
   },
   featuredRulingPreview: {
-    color: COLOURS.textMuted,
-    fontSize: 14,
+    color: COLOURS.textSecondary,
+    fontSize: 12,
     fontFamily: BODY_FONT,
     lineHeight: 18,
   },
   step1ActionSection: {
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: 4,
+    paddingBottom: 4,
   },
   step1FeaturedSection: {
     marginBottom: 12,
@@ -1506,10 +1536,6 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 100,
     padding: 14,
-  },
-  flagSection: {
-    marginTop: 20,
-    width: '100%',
   },
   flagModalOverlay: {
     flex: 1,
@@ -1588,15 +1614,9 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
-  flagReasonInput: {
-    minHeight: 60,
-    padding: 14,
-    marginTop: 0,
-    flex: 0,
-  },
   flagConfirmText: {
     marginTop: 0,
-    color: COLOURS.chipSelected,
+    color: COLOURS.confirm,
     fontSize: 14,
     fontFamily: BODY_FONT,
     fontWeight: '600',
@@ -1605,27 +1625,11 @@ const styles = StyleSheet.create({
   },
   flagErrorText: {
     marginTop: 8,
-    color: COLOURS.highlight,
+    color: COLOURS.error,
     fontSize: 14,
     fontFamily: BODY_FONT,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  counterPill: {
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    backgroundColor: COLOURS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  counterText: {
-    color: COLOURS.textMuted,
-    fontWeight: '700',
-    fontFamily: BODY_FONT,
-    fontSize: 14,
   },
   suggestions: {
     marginTop: 10,
@@ -1658,19 +1662,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLOURS.cardName,
-    backgroundColor: COLOURS.chipUnselected,
+    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   cardChipText: {
-    color: COLOURS.cardName,
+    color: COLOURS.textSecondary,
     fontWeight: '500',
     fontFamily: BODY_FONT,
     fontSize: 14,
   },
   cardChipRemoveMark: {
-    color: COLOURS.highlight,
+    color: COLOURS.action,
     fontWeight: 'bold',
     fontFamily: BODY_FONT,
   },
@@ -1685,8 +1689,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   categoryChipSelected: {
-    backgroundColor: COLOURS.titleAccent,
-    borderColor: COLOURS.titleAccent,
+    backgroundColor: COLOURS.confirm,
+    borderColor: COLOURS.confirm,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
@@ -1695,7 +1699,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 52,
     borderRadius: 10,
-    backgroundColor: COLOURS.primaryButton,
+    backgroundColor: COLOURS.action,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -1711,14 +1715,7 @@ const styles = StyleSheet.create({
     color: COLOURS.text,
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
     fontFamily: BODY_FONT,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    marginTop: 20,
   },
   tertiaryButton: {
     minHeight: 48,
@@ -1733,18 +1730,10 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   tertiaryButtonText: {
-    color: COLOURS.textMuted,
+    color: COLOURS.textSecondary,
     fontSize: 16,
     fontWeight: '400',
     fontFamily: BODY_FONT,
-  },
-  startOverButton: {
-    backgroundColor: COLOURS.titleAccent,
-    borderColor: COLOURS.titleAccent,
-  },
-  startOverButtonText: {
-    color: COLOURS.tagBackground,
-    fontWeight: '600',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -1776,53 +1765,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   step2BackButtonText: {
-    color: COLOURS.textMuted,
+    color: COLOURS.textSecondary,
     fontSize: 16,
   },
   step2VerdictButton: {
     flex: 3,
-    backgroundColor: COLOURS.primaryButton,
+    backgroundColor: COLOURS.action,
     borderRadius: 10,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  step2VerdictButtonText: {
-    color: COLOURS.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  step3SharePrimaryButton: {
-    marginTop: 0,
-    width: '100%',
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLOURS.chipSelected,
-    borderColor: COLOURS.chipSelected,
-  },
-  step3SharePrimaryButtonText: {
-    color: COLOURS.chipUnselected,
-  },
-  step3ResetButton: {
-    marginTop: 0,
-    width: '100%',
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderColor: COLOURS.cardName,
-    borderWidth: 1,
-  },
-  step3ResetButtonText: {
-    color: COLOURS.cardName,
+  step3RulingSection: {
+    backgroundColor: COLOURS.brandDim,
+    borderWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: COLOURS.brandDim,
+    borderBottomColor: COLOURS.brandDim,
+    borderRadius: 4,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    marginBottom: 12,
   },
   step3FlagConfirmationWrap: {
+    width: '100%',
     minHeight: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLOURS.border,
+    borderWidth: 0,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 14,
@@ -1835,7 +1806,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 10,
-    color: COLOURS.highlight,
+    color: COLOURS.error,
     fontWeight: '700',
     lineHeight: 20,
     fontFamily: BODY_FONT,
@@ -1851,7 +1822,7 @@ const styles = StyleSheet.create({
   helperHint: {
     color: COLOURS.textMuted,
     fontFamily: 'serif',
-    textAlign: 'left',
+    textAlign: 'center',
     fontSize: 14,
     marginTop: 8,
   },
@@ -1863,11 +1834,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rulingText: {
-    color: COLOURS.rulingText,
-    fontSize: 16,
-    fontWeight: '700',
+    color: COLOURS.text,
+    fontSize: 18,
+    fontWeight: '600',
     lineHeight: 24,
-    fontFamily: BODY_FONT,
+    fontFamily: TITLE_FONT,
   },
   explanationText: {
     color: COLOURS.text,
@@ -1880,20 +1851,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginTop: 8,
+  },
+  collapsibleHeader: {
+    marginTop: 14,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 6,
+  },
+  collapsibleChevron: {
+    color: COLOURS.confirm,
+    fontSize: 14,
+    lineHeight: 14,
+    fontFamily: BODY_FONT,
   },
   ruleTag: {
     minHeight: 30,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLOURS.rulesTag,
-    backgroundColor: COLOURS.tagBackground,
+    borderColor: COLOURS.brandSoft,
+    backgroundColor: COLOURS.bgAccent,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   ruleTagText: {
-    color: COLOURS.rulesTag,
+    color: COLOURS.textSecondary,
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
@@ -1904,51 +1890,8 @@ const styles = StyleSheet.create({
     width: '100%',
     marginVertical: 16,
   },
-  refineInput: {
-    backgroundColor: COLOURS.surface,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    borderRadius: 12,
-    padding: 14,
-    color: COLOURS.text,
-    fontSize: 16,
-    minHeight: 80,
-    fontFamily: BODY_FONT,
-  },
-  refineButtonBase: {
-    minHeight: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  refineButtonEnabled: {
-    backgroundColor: COLOURS.primaryButton,
-    borderColor: COLOURS.primaryButton,
-  },
-  refineButtonDisabled: {
-    backgroundColor: COLOURS.surface,
-    borderColor: COLOURS.border,
-  },
-  refineButtonTextEnabled: {
-    color: COLOURS.text,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-    fontFamily: BODY_FONT,
-  },
-  refineButtonTextDisabled: {
-    color: COLOURS.placeholder,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-    fontFamily: BODY_FONT,
-  },
   refineErrorText: {
-    color: COLOURS.highlight,
+    color: COLOURS.error,
     fontSize: 12,
     marginTop: 4,
     fontFamily: BODY_FONT,
@@ -1958,7 +1901,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLOURS.primaryButton,
+    borderColor: COLOURS.action,
     backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1966,24 +1909,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   secondaryButtonText: {
-    color: COLOURS.primaryButton,
+    color: COLOURS.action,
     fontSize: 16,
     fontWeight: '400',
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
-  flagButton: {
+  flagTextActionWrap: {
     width: '100%',
     marginTop: 0,
-    minHeight: 52,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLOURS.primaryButton,
-    backgroundColor: 'transparent',
+    minHeight: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   shareButton: {
     width: '100%',
@@ -1991,22 +1930,22 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLOURS.titleAccent,
-    backgroundColor: 'transparent',
+    borderColor: COLOURS.confirm,
+    backgroundColor: COLOURS.confirm,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  flagButtonText: {
-    color: COLOURS.primaryButton,
-    fontSize: 16,
+  flagTextAction: {
+    color: COLOURS.error,
+    fontSize: 14,
     fontWeight: '700',
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
   shareButtonText: {
-    color: COLOURS.titleAccent,
+    color: COLOURS.textSecondary,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
@@ -2025,7 +1964,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   carouselArrowLabel: {
-    color: COLOURS.titleAccent,
+    color: COLOURS.brandSoft,
     fontSize: 16,
   },
   carouselDotsRow: {
@@ -2042,7 +1981,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLOURS.chipBorder,
   },
   carouselDotActive: {
-    backgroundColor: COLOURS.cardName,
+    backgroundColor: COLOURS.brandSoft,
   },
   pressed: {
     opacity: 0.85,

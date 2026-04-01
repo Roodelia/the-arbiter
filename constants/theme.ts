@@ -1,21 +1,34 @@
 export const COLOURS = {
-  background: '#000000',
-  surface: '#111111',
-  titleAccent: '#c8a882',
-  primaryButton: '#9b2335',
-  highlight: '#9b2335',
-  chipSelected: '#93c572',
-  chipUnselected: '#111111',
-  cardName: '#7C6F9B',
-  rulesTag: '#c8a882',
-  rulingText: '#93c572',
-  text: '#f0f0f0',
-  textMuted: '#a0a0a0',
-  border: '#1e1e1e',
-  sectionLabel: '#585858',
-  chipBorder: '#2a2a2a',
-  tagBackground: '#1a1200',
-  placeholder: '#3a3a3a',
+  // Backgrounds
+  background:     '#0b0a1a',   // ink black (page bg)
+  surface:        '#14122b',   // midnight violet (cards, inputs, containers)
+  bgAccent:       '#1C1526',   // warm violet tint (ruling card fill, rule tags, chip accents)
+
+  // Brand identity (dark goldenrod ramp)
+  brand:          '#a67c2e',   // ruling border, logo, featured titles, carousel arrows
+  brandSoft:      '#cbb89d',   // ruling verdict text, carousel dots
+  brandDim:       '#7A5B23',   // rule tag border/text
+
+  // Actions & emphasis (dark amaranth)
+  action:         '#7a1c2e',   // primary CTAs, appeal button, RULING label, remove marks
+
+  // Error feedback
+  error:          '#B85C38',   // validation and error states
+
+  // Confirmation (dark emerald)
+  confirm:        '#1F3D36',   // share button fill, selected category chip fill
+
+  // Text hierarchy
+  text:           '#f0f0f0',   // primary text, button text on dark fills
+  textSecondary:  '#A0A6B0',   // card chip text, helper text, step labels, tertiary button text
+  textMuted:      '#6F7682',   // section labels, chevrons, placeholders
+
+  // Borders
+  border:         '#2a2535',   // container/input/chip borders
+  chipBorder:     '#2a2535',   // unselected chip borders (same as border)
+
+  // Utility
+  placeholder:    '#3a3a3a',   // input placeholder text
 } as const;
 
 export const TITLE_FONT = 'serif';

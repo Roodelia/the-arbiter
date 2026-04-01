@@ -1,4 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
+import { fetchCardImageUri } from '@/utils/scryfall';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,9 +14,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE } from '@/constants/theme';
-import { fetchCardImageUri } from '@/utils/scryfall';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -130,6 +130,8 @@ export default function SharedRulingScreen() {
   const imageUriCacheRef = useRef(imageUriCache);
   imageUriCacheRef.current = imageUriCache;
   const [activeCardPopup, setActiveCardPopup] = useState<string | null>(null);
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,12 +241,12 @@ export default function SharedRulingScreen() {
           </Pressable>
         </View>
         <Text style={styles.sharedTagline}>
-          Pre-Stack Clarity for Magic: The Gathering
+          Instant rulings for Magic: The Gathering interactions
         </Text>
 
         {loading ? (
           <View style={styles.centeredBlock}>
-            <ActivityIndicator color={COLOURS.rulingText} size="large" />
+            <ActivityIndicator color={COLOURS.brandSoft} size="large" />
             <Text style={styles.loadingCaption}>Loading ruling…</Text>
           </View>
         ) : null}
@@ -259,7 +261,7 @@ export default function SharedRulingScreen() {
 
         {!loading && ruling && !notFound && !errorMessage ? (
           <>
-            <View style={styles.resultCard}>
+            <View style={[styles.section, styles.contextSection]}>
               <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Cards</Text>
 
               {cardNames.length > 0 ? (
@@ -285,7 +287,7 @@ export default function SharedRulingScreen() {
 
               {ruling.situation?.trim() || categoryLabels.length > 0 ? (
                 <View style={styles.situationBlock}>
-                  <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION / INTERACTION</Text>
                   {ruling.situation?.trim() ? (
                     <Text style={styles.situationText}>
                       {ruling.situation.trim()}
@@ -314,51 +316,74 @@ export default function SharedRulingScreen() {
                   ) : null}
                 </View>
               ) : null}
+            </View>
 
-              <Text style={styles.sectionLabel}>
-                RULING
-              </Text>
+            <Text style={[styles.sectionLabel, { marginTop: 0 }]}>
+              Verdict
+            </Text>
+            <View style={[styles.section, styles.step3RulingSection]}>
               <Text style={styles.rulingText}>{ruling.ruling}</Text>
+            </View>
 
-              <Text style={styles.sectionLabel}>
-                EXPLANATION
-              </Text>
-              {(() => {
-                const explanationLines = ruling.explanation
-                  .split('\n')
-                  .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
-                  .filter(Boolean);
+            <View style={[styles.section, { paddingBottom: 0 }]}>
+              <Pressable
+                onPress={() => setIsExplanationOpen((prev) => !prev)}
+                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.chipPressed]}>
+                <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
+                  EXPLANATION
+                </Text>
+                <Text style={styles.collapsibleChevron}>
+                  {isExplanationOpen ? '▾' : '▸'}
+                </Text>
+              </Pressable>
+              {isExplanationOpen
+                ? (() => {
+                    const explanationLines = ruling.explanation
+                      .split('\n')
+                      .map((line) => line.replace(/^[\s\*\-•]+/, '').trim())
+                      .filter(Boolean);
 
-                return explanationLines.map((line, index) => (
-                  <View
-                    key={index}
-                    style={styles.explanationRow}>
-                    <Text
-                      style={[styles.explanationText, styles.explanationBullet]}
-                      accessible={false}>
-                      {'\u2022'}
-                    </Text>
-                    <Text style={[styles.explanationText, styles.explanationLine]}>
-                      {line}
-                    </Text>
+                    return explanationLines.map((line, index) => (
+                      <View
+                        key={index}
+                        style={styles.explanationRow}>
+                        <Text
+                          style={[styles.explanationText, styles.explanationBullet]}
+                          accessible={false}>
+                          {'\u2022'}
+                        </Text>
+                        <Text style={[styles.explanationText, styles.explanationLine]}>
+                          {line}
+                        </Text>
+                      </View>
+                    ));
+                  })()
+                : null}
+              <Pressable
+                onPress={() => setIsRulesOpen((prev) => !prev)}
+                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.chipPressed]}>
+                <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
+                  RULES CITED
+                </Text>
+                <Text style={styles.collapsibleChevron}>
+                  {isRulesOpen ? '▾' : '▸'}
+                </Text>
+              </Pressable>
+              {isRulesOpen ? (
+                <>
+                  <View style={styles.rulesRow}>
+                    {rulesCited.map((r, i) => (
+                      <View key={`${r}-${i}`} style={styles.ruleTag}>
+                        <Text style={styles.ruleTagText} numberOfLines={3}>
+                          {r}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                ));
-              })()}
-
-              <Text style={styles.sectionLabel}>
-                RULES CITED
-              </Text>
-              <View style={styles.rulesRow}>
-                {rulesCited.map((r, i) => (
-                  <View key={`${r}-${i}`} style={styles.ruleTag}>
-                    <Text style={styles.ruleTagText} numberOfLines={3}>
-                      {r}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-              {crVersionLabel ? (
-                <Text style={styles.crVersionText}>{crVersionLabel}</Text>
+                  {crVersionLabel ? (
+                    <Text style={styles.crVersionText}>{crVersionLabel}</Text>
+                  ) : null}
+                </>
               ) : null}
             </View>
 
@@ -368,7 +393,7 @@ export default function SharedRulingScreen() {
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Ask ManaJudge</Text>
+              <Text style={styles.primaryButtonText}>Get your own Verdict</Text>
             </Pressable>
           </>
         ) : null}
@@ -394,7 +419,7 @@ export default function SharedRulingScreen() {
               {modalShowLoading ? (
                 <View style={styles.cardModalSpinnerWrap}>
                   <ActivityIndicator
-                    color={COLOURS.titleAccent}
+                    color={COLOURS.brand}
                     size="large"
                   />
                 </View>
@@ -447,7 +472,7 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   sharedTagline: {
-    color: COLOURS.textMuted,
+    color: COLOURS.textSecondary,
     fontSize: 14,
     fontFamily: 'serif',
     textAlign: 'center',
@@ -467,7 +492,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 10,
-    color: COLOURS.primaryButton,
+    color: COLOURS.error,
     fontWeight: '700',
     lineHeight: 20,
     fontFamily: BODY_FONT,
@@ -515,17 +540,18 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     textAlign: 'center',
   },
-  resultCard: {
-    marginTop: 12,
-    padding: 18,
-    borderRadius: 14,
-    backgroundColor: COLOURS.surface,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    overflow: 'visible',
+  section: {
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
+    borderBottomColor: COLOURS.border,
+  },
+  contextSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
   },
   sectionLabel: {
-    color: COLOURS.sectionLabel,
+    color: COLOURS.textMuted,
     fontSize: 10,
     fontWeight: '600',
     marginBottom: 8,
@@ -548,8 +574,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLOURS.cardName,
-    backgroundColor: COLOURS.chipUnselected,
+    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
   },
@@ -557,7 +583,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   chipText: {
-    color: COLOURS.cardName,
+    color: COLOURS.textSecondary,
     fontWeight: '500',
     fontFamily: BODY_FONT,
     fontSize: 14,
@@ -574,15 +600,15 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   categoryChipSelected: {
-    backgroundColor: COLOURS.titleAccent,
-    borderColor: COLOURS.titleAccent,
+    backgroundColor: COLOURS.confirm,
+    borderColor: COLOURS.confirm,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
     fontSize: 14,
   },
   categoryChipTextSelected: {
-    color: COLOURS.chipUnselected,
+    color: COLOURS.textSecondary,
     fontWeight: '700',
   },
   situationBlock: {
@@ -596,12 +622,23 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   rulingText: {
-    marginTop: 6,
-    color: COLOURS.rulingText,
-    fontSize: 16,
-    fontWeight: '700',
+    color: COLOURS.text,
+    fontSize: 18,
+    fontWeight: '600',
     lineHeight: 24,
-    fontFamily: BODY_FONT,
+    fontFamily: TITLE_FONT,
+  },
+  step3RulingSection: {
+    backgroundColor: COLOURS.brandDim,
+    borderWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: COLOURS.brandDim,
+    borderBottomColor: COLOURS.brandDim,
+    borderRadius: 4,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    marginBottom: 12,
   },
   explanationRow: {
     flexDirection: 'row',
@@ -622,24 +659,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rulesRow: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+  collapsibleHeader: {
+    marginTop: 14,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 6,
+  },
+  collapsibleChevron: {
+    color: COLOURS.confirm,
+    fontSize: 14,
+    lineHeight: 14,
+    fontFamily: BODY_FONT,
+  },
   ruleTag: {
     minHeight: 30,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLOURS.rulesTag,
-    backgroundColor: COLOURS.tagBackground,
+    borderColor: COLOURS.brandSoft,
+    backgroundColor: COLOURS.bgAccent,
     justifyContent: 'center',
     maxWidth: '100%',
   },
   ruleTagText: {
-    color: COLOURS.rulesTag,
+    color: COLOURS.textSecondary,
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
@@ -655,7 +706,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     minHeight: 52,
     borderRadius: 10,
-    backgroundColor: COLOURS.primaryButton,
+    backgroundColor: COLOURS.action,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
