@@ -102,7 +102,7 @@ The RULING should state the final answer only — no mechanistic reasoning.
 EXPLANATION: [Bullet points for a player at the table. One • per line, 
 3-5 bullets maximum. Each bullet is one key point of reasoning. 
 No pass labels or internal working.]
-RULES CITED: [Rule numbers and descriptions, one per line]
+RULES CITED: [comma-separated rule numbers only, e.g. 702.15a, 601.2c — no rule text]
 CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
 
 Do not include any pass labels or internal calculations 
@@ -286,7 +286,7 @@ app.post("/categories", async (req, res) => {
     const userContent = `Here are the cards and their oracle texts:\n\n${oracleBlock}\n\nReturn only a JSON array of 3-5 short category labels.`;
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
       system: [
         {
@@ -471,10 +471,65 @@ ${contextSection}`;
 
     let rules_cited = [];
     if (rulesMatch) {
-      rules_cited = rulesMatch[1]
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const rawRulesBlock = rulesMatch[1] || "";
+      const parsedRuleNumbers = Array.from(
+        new Set(
+          rawRulesBlock
+            .split(/[\n,;]+/)
+            .map((part) =>
+              part
+                .replace(/^[\s•\-*]+/, "")
+                .replace(/^rules?\s*cited\s*:\s*/i, "")
+                .trim(),
+            )
+            .filter(Boolean),
+        ),
+      );
+
+      if (parsedRuleNumbers.length > 0) {
+        const { data: exactRules, error: rulesLookupError } = await supabase
+          .from("comprehensive_rules")
+          .select("rule_number, rule_text")
+          .in("rule_number", parsedRuleNumbers);
+
+        if (rulesLookupError) {
+          console.error("Error looking up exact rules:", rulesLookupError);
+        }
+
+        const ruleMap = Object.fromEntries(
+          (exactRules ?? []).map((r) => [r.rule_number, r.rule_text]),
+        );
+
+        rules_cited = parsedRuleNumbers.map((num) => {
+          const text = ruleMap[num];
+          return text ? `${num}: ${text}` : num;
+        });
+
+        const unmatched = parsedRuleNumbers.filter((num) => !ruleMap[num]);
+        for (const num of unmatched) {
+          const { data: fuzzyRows, error: fuzzyError } = await supabase
+            .from("comprehensive_rules")
+            .select("rule_number, rule_text")
+            .like("rule_number", `${num}%`)
+            .limit(1);
+
+          if (fuzzyError) {
+            console.error("Error looking up fuzzy rule match:", {
+              rule_number: num,
+              error: fuzzyError,
+            });
+            continue;
+          }
+
+          if (fuzzyRows?.[0]) {
+            const row = fuzzyRows[0];
+            const idx = rules_cited.indexOf(num);
+            if (idx !== -1) {
+              rules_cited[idx] = `${row.rule_number}: ${row.rule_text}`;
+            }
+          }
+        }
+      }
     }
 
     const oracle_referenced = oracleRefMatch

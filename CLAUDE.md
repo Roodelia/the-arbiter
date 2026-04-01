@@ -19,7 +19,7 @@ Casual MTG players who encounter rules disputes during games.
 ## Tech Stack
 - React Native with Expo (TypeScript)
 - Backend: Express.js server (handles all API calls — keys never on device)
-- LLM: Anthropic Claude (claude-sonnet-4-6) for rulings and category generation
+- LLM: Anthropic Claude — claude-haiku-4-5-20251001 for category generation; claude-sonnet-4-6 for rulings
 - Embeddings: Voyage AI (voyage-3.5, 1024 dimensions)
 - Vector DB: Supabase pgvector (comprehensive_rules table)
 - CR indexing: scripts/embed_rules.py chunks by rule number; child rows use citation rule_number only, while rule_text is prefixed with the major section title (e.g. "Special Actions — Rule 116.2a: …"). Re-run when Wizards publishes a new CR file.
@@ -96,7 +96,7 @@ GET /share/:id
 (Model is instructed: RULING must match the EXPLANATION, final answer only on the RULING line — no mechanistic reasoning there.)
 RULING: [one sentence]
 EXPLANATION: [step by step / bullets]
-RULES CITED: [rule numbers]
+RULES CITED: [Claude outputs rule numbers only; backend resolves to exact Comprehensive Rules text before returning]
 CARD ORACLE TEXT REFERENCED: [relevant card text]
 
 ## Three-Step UX Flow
