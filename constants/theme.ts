@@ -2,8 +2,8 @@ export const COLOURS = {
   // Backgrounds
   background:     '#070611',   // ink black (page bg)
   surface:        '#0b0a1a',   // midnight violet (cards, inputs, containers)
-  bgRuling:       '#000000',   // warm violet tint (ruling card fill, rule tags, chip accents) #14122b
-  bgAccent:       '#14122b',   //  #25224a
+  bgRuling:       '#14122b',   // warm violet tint (ruling card fill, rule tags, chip accents) #14122b
+  bgAccent:       '#25224a',   //  #25224a
 
   // Brand identity (dark goldenrod ramp)
   brand:          '#a67c2e',   // ruling border, logo, featured titles, carousel arrows

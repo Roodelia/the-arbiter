@@ -1812,7 +1812,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   rulingSectionTitle: {
-    color: COLOURS.authority,
+    color: COLOURS.brandSoft,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 6,
@@ -1867,7 +1867,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rulingText: {
-    color: COLOURS.brandSoft,
+    color: COLOURS.text,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,

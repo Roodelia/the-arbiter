@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   rulingText: {
-    color: COLOURS.brandSoft,
+    color: COLOURS.text,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,
