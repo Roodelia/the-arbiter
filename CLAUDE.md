@@ -22,7 +22,7 @@ Casual MTG players who encounter rules disputes during games.
 - LLM: Anthropic Claude — claude-haiku-4-5-20251001 for category generation; claude-sonnet-4-6 for rulings
 - Embeddings: Voyage AI (voyage-3.5, 1024 dimensions)
 - Vector DB: Supabase pgvector (comprehensive_rules table)
-- CR indexing: scripts/embed_rules.py chunks by rule number; child rows use citation rule_number only, while rule_text is prefixed with the major section title (e.g. "Special Actions — Rule 116.2a: …"). Re-run when Wizards publishes a new CR file.
+- CR indexing: scripts/embed_rules.py chunks by rule number; each chunk includes `parent_rule_number` (null for base rules like `702.15`, populated for lettered subrules like `702.15a -> 702.15`). The `comprehensive_rules` table includes an index on `parent_rule_number` for sibling expansion queries, and after vector search the top 3 hits are expanded to include parent/sibling rules before context is sent to Claude. Re-run when Wizards publishes a new CR file.
 - Card data: Scryfall API (free, no auth, fuzzy name search + rulings endpoint)
 - Analytics: Vercel Analytics
 

@@ -120,12 +120,19 @@ async function presentRulingShare(
   return undefined;
 }
 
+type RagMatchLog = {
+  rule_number: string;
+  similarity: number | null;
+  expanded: boolean;
+};
+
 type RulingResponse = {
   ruling: string;
   explanation: string;
   rules_cited: string[];
   oracle_referenced: string;
   cr_version?: string;
+  rag_matches?: RagMatchLog[];
 };
 
 type SelectedCard = {
@@ -140,7 +147,7 @@ const RATE_LIMIT_MESSAGE =
   "You've reached the limit of 60 verdicts per hour. Please try again later.";
 
 const NO_CATEGORIES_MESSAGE =
-  "Couldn't load interaction categories. You can still describe your situation below and get a verdict.";
+  "No sugggested interactions found. Please describe your situation below.";
 
 const NO_RULING_MESSAGE =
   "ManaJudge couldn't reach a verdict. Please try again or rephrase your situation.";
@@ -207,6 +214,7 @@ export default function Index() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   const [situation, setSituation] = useState('');
   const [isRulingLoading, setIsRulingLoading] = useState(false);
@@ -481,6 +489,7 @@ export default function Index() {
     categoriesAbortRef.current = controller;
 
     setIsCategoriesLoading(true);
+    setCategoriesError(null);
     try {
       const res = await fetch(`${BACKEND_BASE_URL}/categories`, {
         method: 'POST',
@@ -492,7 +501,7 @@ export default function Index() {
       if (res.status === 429) {
         setCategories([]);
         setSelectedCategory([]);
-        setErrorMessage(RATE_LIMIT_MESSAGE);
+        setCategoriesError(RATE_LIMIT_MESSAGE);
         return;
       }
       if (!res.ok) throw new Error('Failed to fetch categories');
@@ -504,7 +513,7 @@ export default function Index() {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       setCategories([]);
       setSelectedCategory([]);
-      setErrorMessage(NO_CATEGORIES_MESSAGE);
+      setCategoriesError(NO_CATEGORIES_MESSAGE);
     } finally {
       setIsCategoriesLoading(false);
     }
@@ -516,6 +525,7 @@ export default function Index() {
       if (step < 2) {
         setCategories([]);
         setSelectedCategory([]);
+        setCategoriesError(null);
       }
       return;
     }
@@ -546,11 +556,17 @@ export default function Index() {
 
     setIsRulingLoading(true);
     try {
-    const payload: { cards: string[]; situation?: string; category?: string } = {
+    const payload: {
+      cards: string[];
+      case_id: string;
+      situation?: string;
+      category?: string;
+    } = {
       cards: selectedCards.map((c) => c.name),
+      case_id: caseId.current,
+      ...(categoryPayload ? { category: categoryPayload } : {}),
+      ...(situation.trim() ? { situation: situation.trim() } : {}),
     };
-      if (categoryPayload) payload.category = categoryPayload;
-      if (situation.trim()) payload.situation = situation.trim();
 
       const res = await fetch(`${BACKEND_BASE_URL}/ruling`, {
         method: 'POST',
@@ -574,6 +590,7 @@ export default function Index() {
         explanation: json.explanation,
         rules_cited: json.rules_cited,
         cr_version: json.cr_version,
+        rag_matches: json.rag_matches,
       });
 
       if (shareCopiedTimerRef.current) {
@@ -668,6 +685,7 @@ export default function Index() {
         situation: situation.trim() || undefined,
         ruling: rulingResult.ruling,
         cr_version: rulingResult.cr_version,
+        rag_matches: rulingResult.rag_matches,
         flagged: true,
         flag_reason: flagReason,
       });
@@ -693,6 +711,7 @@ export default function Index() {
         explanation: rulingResult.explanation,
         rules_cited: rulingResult.rules_cited,
         cr_version: rulingResult.cr_version,
+        rag_matches: rulingResult.rag_matches,
         flagged: true,
         flag_reason: trimmedReason,
       });
@@ -758,6 +777,7 @@ export default function Index() {
     setShareCopied(false);
     setShareError(null);
     setErrorMessage(null);
+    setCategoriesError(null);
     setRulingResult(null);
     setSelectedCategory([]);
     setSituation('');
@@ -1090,6 +1110,9 @@ export default function Index() {
                 );
               })}
             </View>
+            {categoriesError ? (
+              <Text style={styles.errorText}>{categoriesError}</Text>
+            ) : null}
           </View>
 
           <View style={styles.section}>

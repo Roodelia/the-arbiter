@@ -98,6 +98,12 @@ RULE_NUMBER_DOT_RE = re.compile(r"^(\d+)\.(\d+)\.\s*(.+)$")
 SECTION_HEADER_RE = re.compile(r"^(\d{3,})\.\s+(.+)$")
 
 
+def _get_parent_rule_number(rule_number: str) -> Optional[str]:
+    """Return the parent rule number for lettered subrules, e.g. 702.15a -> 702.15. Returns None for non-lettered rules."""
+    m = re.match(r"^(\d+\.\d+)[a-z]$", rule_number)
+    return m.group(1) if m else None
+
+
 def _parse_rule_line(line: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     If line starts a CR rule or section header, return (kind, rule_number, rest).
@@ -153,6 +159,7 @@ def chunk_rules(cr_text: str) -> list[dict]:
             {
                 "rule_number": current_rule_number,
                 "rule_text": display,
+                "parent_rule_number": _get_parent_rule_number(current_rule_number),
             }
         )
         current_rule_number = None
@@ -177,6 +184,7 @@ def chunk_rules(cr_text: str) -> list[dict]:
                 {
                     "rule_number": f"{major}.",
                     "rule_text": f"Rule {major}.: {combined}",
+                    "parent_rule_number": None,
                 }
             )
         pending_section_lines = []
@@ -283,6 +291,7 @@ def upload_to_supabase(chunks: list[dict], supabase_client) -> None:
             {
                 "rule_number": c["rule_number"],
                 "rule_text": c["rule_text"],
+                "parent_rule_number": c.get("parent_rule_number"),
                 "embedding": c["embedding"],
                 "cr_version": CR_VERSION,
             }
@@ -344,8 +353,11 @@ def test_retrieval(query: str, vo: voyageai.Client, supabase_client) -> None:
 #   id bigserial primary key,
 #   rule_number text,
 #   rule_text text,
+#   parent_rule_number text,
 #   embedding vector(1024)
 # );
+# alter table comprehensive_rules add column if not exists parent_rule_number text;
+# create index if not exists idx_cr_parent_rule_number on comprehensive_rules (parent_rule_number);
 # create index on comprehensive_rules
 # using ivfflat (embedding vector_cosine_ops)
 # with (lists = 100);

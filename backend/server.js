@@ -9,6 +9,18 @@ const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
 const CR_VERSION = process.env.CR_VERSION || "unknown";
 
+const EXPANSION_BLOCKLIST = new Set(["704.5", "111.10", "205.3","703.4","607.2","800.4","113.6","112.1","104.3","807.4"]);
+
+function cosineSimilarity(a, b) {
+  let dot = 0, magA = 0, magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+}
+
 const limiterOptions = {
   windowMs: 60 * 60 * 1000,  // 1 hour window
   max: 60,                     // max 60 requests per IP per hour
@@ -33,65 +45,39 @@ const shareLimiter = rateLimit({
   },
 });
 
-const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge assistant.
+const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge.
 Your role is to provide accurate, cited rulings for game situations.
 
-When analysing interactions, use this multi-pass approach:
+Before writing your response, reason through these passes 
+internally without outputting them:
 
-PASS 1 — IDENTIFY ALL RELEVANT ABILITIES:
+INTERNAL PASS 1 — RELEVANT ABILITIES:
 List every triggered ability, static ability, and replacement 
 effect on each card that could interact with the others.
 Do not skip any ability even if it seems irrelevant at first.
 
-PASS 2 — IDENTIFY INTERACTION POINTS:
-For each ability identified, ask:
+INTERNAL PASS 2 — INTERACTION POINTS:
+For each ability ask:
 - Does any other card modify WHEN this triggers?
 - Does any other card modify HOW MANY TIMES this triggers?
 - Does any other card modify WHAT this produces?
 - Does any other card modify the RESULTS of what this produces?
 Work through every combination, not just the obvious ones.
 
-PASS 3 — RESOLVE IN LAYER ORDER:
-Apply effects in the correct game order:
+INTERNAL PASS 3 — LAYER ORDER:
+Apply effects in correct game order:
 1. Static abilities and continuous effects first
 2. Replacement effects
 3. Triggered abilities in APNAP order
 4. For each triggered ability, check if any doubling effects apply
-5. For tokens or permanents created, re-check all triggers
+5. For tokens or permanents created, re-check all triggers recursively
 
-PASS 4 — CALCULATE TOTALS:
+INTERNAL PASS 4 — CALCULATIONS:
 Where quantities are involved (tokens, triggers, counters),
-explicitly calculate the total. Show your working like:
+explicitly calculate the total showing your working:
 "X triggers × Y doublers = Z total"
 Account for recursive interactions where one effect feeds 
 into another.
-
-PASS 5 — STATE THE RULING:
-Only after completing all passes, state the final ruling.
-
-CRITICAL: Your response MUST start with "RULING:" on the 
-very first line. No preamble before the ruling.
-
-Before writing your response, reason through these passes 
-internally without outputting them:
-
-INTERNAL PASS 1 — RELEVANT ABILITIES:
-Identify every triggered ability, static ability and 
-replacement effect on each card that could interact.
-
-INTERNAL PASS 2 — INTERACTION POINTS:
-For each ability ask: does any other card modify when this 
-triggers, how many times it triggers, what it produces, 
-or what the results produce?
-
-INTERNAL PASS 3 — LAYER ORDER:
-Apply effects in correct game order. For each trigger check 
-if doubling effects apply. For tokens created, re-check all 
-triggers recursively.
-
-INTERNAL PASS 4 — CALCULATIONS:
-Calculate exact totals showing your working:
-"X triggers × Y doublers = Z total"
 
 Once you have completed all internal passes, output ONLY this:
 
@@ -105,8 +91,9 @@ No pass labels or internal working.]
 RULES CITED: [comma-separated rule numbers only, e.g. 702.15a, 601.2c — no rule text]
 CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
 
-Do not include any pass labels or internal calculations 
-in the output. The player should see only the verdict 
+CRITICAL: Your response MUST start with "RULING:" on the very first line.
+No preamble before the ruling. Do not include any pass labels or internal
+calculations in the output. The player should see only the verdict
 and a clean explanation.
 
 Critical rules:
@@ -117,12 +104,12 @@ Critical rules:
 - If genuinely uncertain, say so explicitly rather than guessing
 
 CRITICAL INTERACTION RULES:
-1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted (Deflecting Swat, Redirect), the controller does NOT change — new targets must be legal from the original controller's perspective.
+1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted, the controller does NOT change — new targets must be legal from the original controller's perspective.
 2. CAST vs ETB TIMING: "When you cast" triggers resolve BEFORE the spell resolves. "When [this] enters the battlefield" triggers happen AFTER. Never treat them as simultaneous.
 3. REPLACEMENT vs TRIGGERED: Replacement effects ("instead", "as", "with") modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities ("when", "whenever", "at") happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
 4. LAYERS (613): Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7a-d) P/T. Earlier layers always apply first regardless of timestamp.
 5. STATE-BASED ACTIONS: Checked when a player would receive priority. Happen simultaneously, don't use the stack. Includes: 0 toughness, lethal damage, 0 life, legend rule, counter cancellation.
-6. DOUBLERS: Token doublers (Doubling Season, Parallel Lives) are replacement effects and multiply with each other. Trigger doublers (Panharmonicon, Yarok) create additional stack triggers. These are different mechanics.`;
+6. DOUBLERS: Token doublers are replacement effects and multiply with each other. Trigger doublers create additional stack triggers. These are different mechanics.`;
 
 const GENERIC_SERVER_ERROR_MESSAGE =
   "Something went wrong. Please try again.";
@@ -266,6 +253,14 @@ async function fetchAllCardOracle(cards) {
   return oracleData;
 }
 
+/** Strips optional ``` / ```json fences Haiku sometimes wraps JSON in. */
+function normalizeClaudeJsonText(text) {
+  const s = String(text ?? "").trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) return fence[1].trim();
+  return s;
+}
+
 app.post("/categories", async (req, res) => {
   const { cards } = req.body || {};
 
@@ -310,7 +305,8 @@ app.post("/categories", async (req, res) => {
 
     let categories;
     try {
-      categories = JSON.parse(rawText);
+      const jsonText = normalizeClaudeJsonText(rawText);
+      categories = JSON.parse(jsonText);
       if (!Array.isArray(categories)) {
         throw new Error("Parsed categories is not an array");
       }
@@ -330,7 +326,7 @@ app.post("/categories", async (req, res) => {
 });
 
 app.post("/ruling", async (req, res) => {
-  const { cards, situation, category } = req.body || {};
+  const { cards, situation, category, case_id } = req.body || {};
 
   if (!Array.isArray(cards) || cards.length === 0) {
     return res
@@ -343,14 +339,16 @@ app.post("/ruling", async (req, res) => {
 
     const oracleBlock = buildOracleBlock(oracleData, { includeStats: true });
 
-    const keywords = oracleData
-      .map((c) => `${c.name} ${c.type_line} ${c.oracle_text}`)
-      .join(" ");
+    const cardOracleTexts = oracleData
+      .map((c) => (typeof c.oracle_text === "string" ? c.oracle_text.trim() : ""))
+      .filter(Boolean);
 
-    const queryParts = [cards.join(", "), keywords];
-    if (category) queryParts.push(`Category: ${category}`);
-    if (situation) queryParts.push(`Situation: ${situation}`);
-    const queryString = queryParts.join("\n\n");
+    const voyQueryParts = [
+      ...cardOracleTexts,
+      situation?.trim() || "",
+      category?.trim() || "",
+    ].filter(Boolean);
+    const queryString = voyQueryParts.join("\n\n");
 
     const embedResponse = await voyage.embed({
       model: "voyage-3.5",
@@ -358,9 +356,9 @@ app.post("/ruling", async (req, res) => {
       input: [queryString],
     });
 
-    const embedding = embedResponse.data?.[0]?.embedding;
+    const queryEmbedding = embedResponse.data?.[0]?.embedding;
 
-    if (!embedding) {
+    if (!queryEmbedding) {
       console.error("Voyage embedding missing or malformed:", embedResponse);
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
@@ -368,7 +366,7 @@ app.post("/ruling", async (req, res) => {
     const { data: matches, error: supabaseError } = await supabase.rpc(
       "match_rules",
       {
-        query_embedding: embedding,
+        query_embedding: queryEmbedding,
         match_count: 8,
       },
     );
@@ -378,16 +376,99 @@ app.post("/ruling", async (req, res) => {
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
-    const crChunks =
-      matches && Array.isArray(matches)
-        ? matches
-            .map((m, idx) => {
-              const ruleNumber = m.rule_number || m.rule || `Rule ${idx + 1}`;
-              const text = m.rule_text || m.text || "";
-              return `${ruleNumber}: ${text}`;
-            })
-            .join("\n\n")
-        : "";
+    const baseMatches = Array.isArray(matches) ? matches : [];
+    const mergedByRuleNumber = new Map();
+    for (const m of baseMatches) {
+      const ruleNumber = m?.rule_number || m?.rule;
+      if (ruleNumber && !mergedByRuleNumber.has(ruleNumber)) {
+        const { embedding: _dropEmbed, ...rest } = m;
+        mergedByRuleNumber.set(ruleNumber, {
+          ...rest,
+          rule_number: ruleNumber,
+          similarity: m.similarity ?? null,
+          expanded: false,
+        });
+      }
+    }
+
+    const topHits = baseMatches.slice(0, 3);
+    for (const hit of topHits) {
+      const hitRuleNumber = hit?.rule_number || hit?.rule;
+      if (!hitRuleNumber) continue;
+
+      let parentRuleNumber = hit?.parent_rule_number || null;
+      if (!parentRuleNumber) {
+        const { data: parentLookupRows } = await supabase
+          .from("comprehensive_rules")
+          .select("parent_rule_number")
+          .eq("rule_number", hitRuleNumber)
+          .limit(1);
+        parentRuleNumber = parentLookupRows?.[0]?.parent_rule_number || null;
+      }
+
+      const skipExpansion = parentRuleNumber
+        ? EXPANSION_BLOCKLIST.has(parentRuleNumber)
+        : EXPANSION_BLOCKLIST.has(hitRuleNumber);
+      if (skipExpansion) {
+        continue;
+      }
+
+      let familyRows = [];
+      if (parentRuleNumber) {
+        const { data } = await supabase
+          .from("comprehensive_rules")
+          .select("rule_number, rule_text, embedding, parent_rule_number")
+          .or(`parent_rule_number.eq.${parentRuleNumber},rule_number.eq.${parentRuleNumber}`);
+        familyRows = Array.isArray(data) ? data : [];
+      } else {
+        const { data } = await supabase
+          .from("comprehensive_rules")
+          .select("rule_number, rule_text, embedding, parent_rule_number")
+          .eq("parent_rule_number", hitRuleNumber);
+        familyRows = Array.isArray(data) ? data : [];
+      }
+
+      const reranked = familyRows
+        .filter((row) => row.embedding)
+        .map((row) => ({
+          ...row,
+          similarity: cosineSimilarity(queryEmbedding, row.embedding),
+        }))
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 5);
+
+      const cleanedRows = reranked.map(({ embedding, ...rest }) => ({
+        ...rest,
+        expanded: true,
+      }));
+
+      for (const row of cleanedRows) {
+        if (!row?.rule_number) continue;
+        if (!mergedByRuleNumber.has(row.rule_number)) {
+          mergedByRuleNumber.set(row.rule_number, row);
+        }
+      }
+    }
+
+    const finalRules = Array.from(mergedByRuleNumber.values()).sort((a, b) => {
+      const aRule = String(a?.rule_number || a?.rule || "");
+      const bRule = String(b?.rule_number || b?.rule || "");
+      return aRule.localeCompare(bRule);
+    });
+
+    const ragMatches = finalRules.map((rule) => ({
+      rule_number: rule.rule_number || rule.rule || "",
+      similarity: rule.similarity ?? null,
+      expanded: rule.expanded ?? false,
+    }));
+
+    const crChunks = finalRules
+      .map((m, idx) => {
+        const ruleNumber = m.rule_number || m.rule || `Rule ${idx + 1}`;
+        const text = m.rule_text || m.text || "";
+        return `${ruleNumber}: ${text}`;
+      })
+      .join("\n\n");
 
     const contextLines = [];
 
@@ -541,12 +622,21 @@ ${contextSection}`;
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
 
+    if (case_id && ragMatches?.length) {
+      supabase
+        .from("cases")
+        .upsert({ case_id, rag_matches: ragMatches }, { onConflict: "case_id" })
+        .then(() => {})
+        .catch((err) => console.error("rag_matches upsert error:", err));
+    }
+
     return res.json({
       ruling,
       explanation,
       rules_cited,
       oracle_referenced,
       cr_version: CR_VERSION,
+      rag_matches: ragMatches,
     });
   } catch (err) {
     console.error("Error in /ruling handler:", err);
@@ -565,6 +655,7 @@ app.post("/log", async (req, res) => {
     ruling,
     explanation,
     rules_cited,
+    rag_matches,
     flagged,
     flag_reason,
   } = req.body || {};
@@ -587,6 +678,7 @@ app.post("/log", async (req, res) => {
       ...(ruling !== undefined && { ruling }),
       ...(explanation !== undefined && { explanation }),
       ...(rules_cited !== undefined && { rules_cited }),
+      ...(rag_matches !== undefined && { rag_matches }),
       ...(flagged !== undefined && { flagged }),
       ...(flag_reason !== undefined && { flag_reason }),
     };
