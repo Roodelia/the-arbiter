@@ -770,6 +770,7 @@ export default function Index() {
   }, [refineText, refining, selectedCards, selectedCategory]);
 
   const goToStep1 = useCallback(() => {
+    caseId.current = generateId();
     if (shareCopiedTimerRef.current) {
       clearTimeout(shareCopiedTimerRef.current);
       shareCopiedTimerRef.current = null;
@@ -1303,7 +1304,6 @@ export default function Index() {
                     onPress={() => {
                       setSelectedCards([]);
                       setCardIndex(0);
-                      caseId.current = generateId();
                       goToStep1();
                     }}
                     style={styles.step2VerdictButton}>
