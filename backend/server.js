@@ -54,11 +54,11 @@ function cosineSimilarity(a, b) {
 
 const limiterOptions = {
   windowMs: 60 * 60 * 1000,  // 1 hour window
-  max: 120,                    // max 120 requests per IP per hour
+  max: 60,                     // max 60 requests per IP per hour
   standardHeaders: true,       // return rate limit info in headers
   legacyHeaders: false,
   message: {
-    error: 'Too many requests. You have reached the limit of 120 rulings per hour. Please try again later.'
+    error: 'Too many requests. You have reached the limit of 60 rulings per hour. Please try again later.'
   },
   handler: (req, res, next, options) => {
     res.status(429).json(options.message);
