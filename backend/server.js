@@ -292,6 +292,44 @@ function normalizeClaudeJsonText(text) {
   return s;
 }
 
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * CR rows from embed_rules use "702. Keyword Abilities — Rule 702.3a: …" or "Rule 104.1: …".
+ * For API responses we return only the cited rule number and the substantive text.
+ */
+function stripCrRuleDisplayPrefix(ruleNumber, ruleTextFromDb) {
+  const raw = String(ruleTextFromDb ?? "");
+  const num = String(ruleNumber ?? "").trim();
+  if (!num || !raw.trim()) return raw.trim();
+
+  const esc = escapeRegExp(num);
+  const withSection = new RegExp(`^.*? — Rule ${esc}:\\s*`);
+  let rest = raw.replace(withSection, "");
+  if (rest === raw) {
+    const ruleOnly = new RegExp(`^Rule ${esc}:\\s*`);
+    rest = raw.replace(ruleOnly, "");
+  }
+  const out = rest.trim();
+  return out.length > 0 ? out : raw.trim();
+}
+
+function formatRulesCitedForClient(rulesCited) {
+  if (!Array.isArray(rulesCited)) return rulesCited;
+  return rulesCited.map((entry) => {
+    if (typeof entry !== "string") return entry;
+    const sep = ": ";
+    const idx = entry.indexOf(sep);
+    if (idx === -1) return entry;
+    const num = entry.slice(0, idx).trim();
+    const body = entry.slice(idx + sep.length);
+    const cleaned = stripCrRuleDisplayPrefix(num, body);
+    return `${num}: ${cleaned}`;
+  });
+}
+
 app.post("/categories", async (req, res) => {
   const { cards } = req.body || {};
 
@@ -304,16 +342,28 @@ app.post("/categories", async (req, res) => {
   try {
     const oracleData = await fetchAllCardOracle(cards);
 
-    const systemPrompt =
-      "You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant interaction categories a player might want to ask about. Respond ONLY with a valid JSON array of 3-5 short category label strings. No preamble, no markdown, just the raw JSON array.";
+    const systemPrompt = `You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant SPECIFIC interaction categories a player would likely need a ruling on when these cards are on the battlefield together or being cast in sequence.
+
+Rules for generating categories:
+- Focus on card-to-card INTERACTIONS, not individual card mechanics in isolation
+- Be specific: "Loyalty counter doubling" not "Counters", "ETB trigger timing with flash" not "Triggered abilities"
+- Think about what causes confusion or disputes at the table with these specific cards
+- If cards share a mechanic, call out the specific interaction (e.g., "Multiple replacement effects on damage")
+- For a single card, focus on the most commonly misunderstood or disputed aspects of that card
+
+Respond ONLY with a valid JSON array of 3-5 short category label strings. No preamble, no markdown, just the raw JSON array.`;
 
     const oracleBlock = buildOracleBlock(oracleData, { includeStats: false });
 
-    const userContent = `Here are the cards and their oracle texts:\n\n${oracleBlock}\n\nReturn only a JSON array of 3-5 short category labels.`;
+    const userContent = `Here are the cards and their oracle texts:
+
+${oracleBlock}
+
+What specific interactions or ruling questions would players most likely need help with when playing these cards together? Return only a JSON array of 3-5 specific category labels.`;
 
     const completion = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
+      max_tokens: 400,
       system: [
         {
           type: "text",
@@ -341,6 +391,9 @@ app.post("/categories", async (req, res) => {
       if (!Array.isArray(categories)) {
         throw new Error("Parsed categories is not an array");
       }
+      categories = categories.map((c) =>
+        typeof c === "string" ? c.replace(/_/g, " ") : c,
+      );
     } catch (parseErr) {
       console.error("Failed to parse categories JSON from Claude:", {
         rawText,
@@ -666,7 +719,7 @@ ${contextSection}`;
     return res.json({
       ruling,
       explanation,
-      rules_cited,
+      rules_cited: formatRulesCitedForClient(rules_cited),
       oracle_referenced,
       cr_version: CR_VERSION,
       rag_matches: ragMatches,
