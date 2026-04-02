@@ -14,7 +14,9 @@ async function sendTelegramAlert({ cards, situation, ruling }) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
 
-  const cardNames = cards?.map(c => c.name).join(', ') || 'No cards';
+  const cardNames = Array.isArray(cards) && cards.length
+    ? cards.map(c => typeof c === 'string' ? c : c.name).join(', ')
+    : 'No cards';
   const situation_text = situation?.slice(0, 100) || '';
   const ruling_text = ruling?.slice(0, 600) || '';
   const text = [
