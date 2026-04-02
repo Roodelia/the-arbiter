@@ -243,6 +243,7 @@ export default function SharedRulingScreen() {
         <Text style={styles.sharedTagline}>
           Instant rulings for Magic: The Gathering interactions
         </Text>
+        <View style={styles.refineDivider} />
 
         {loading ? (
           <View style={styles.centeredBlock}>
@@ -287,7 +288,7 @@ export default function SharedRulingScreen() {
 
               {ruling.situation?.trim() || categoryLabels.length > 0 ? (
                 <View style={styles.situationBlock}>
-                  <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION / INTERACTION</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 6 }]}>SITUATION / INTERACTION</Text>
                   {ruling.situation?.trim() ? (
                     <Text style={styles.situationText}>
                       {ruling.situation.trim()}
@@ -296,18 +297,8 @@ export default function SharedRulingScreen() {
                   {categoryLabels.length > 0 ? (
                     <View style={styles.chipsRow}>
                       {categoryLabels.map((label, idx) => (
-                        <View
-                          key={`${label}-${idx}`}
-                          style={[
-                            styles.categoryChip,
-                            styles.categoryChipSelected,
-                          ]}>
-                          <Text
-                            style={[
-                              styles.categoryChipText,
-                              styles.categoryChipTextSelected,
-                            ]}
-                            numberOfLines={2}>
+                        <View key={`${label}-${idx}`} style={styles.categoryChip}>
+                          <Text style={styles.categoryChipText} numberOfLines={2}>
                             {label}
                           </Text>
                         </View>
@@ -319,6 +310,7 @@ export default function SharedRulingScreen() {
             </View>
 
             <View style={[styles.section, styles.step3RulingSection]}>
+              <View style={styles.rulingFocusStrip} />
               <Text style={styles.rulingSectionTitle}>VERDICT</Text>
               <Text style={styles.rulingText}>{ruling.ruling}</Text>
             </View>
@@ -385,6 +377,8 @@ export default function SharedRulingScreen() {
               ) : null}
             </View>
 
+            <View style={styles.refineDivider} />
+
             <Pressable
               onPress={() => router.push('/')}
               style={({ pressed }) => [
@@ -412,7 +406,10 @@ export default function SharedRulingScreen() {
           <View
             style={styles.cardImageModalCenterLayer}
             pointerEvents="box-none">
-            <View
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close card image"
+              onPress={() => setActiveCardPopup(null)}
               style={[styles.cardModalImageFrame, { width: cardPreviewWidth }]}>
               {modalShowLoading ? (
                 <View style={styles.cardModalSpinnerWrap}>
@@ -432,7 +429,7 @@ export default function SharedRulingScreen() {
                   <Text style={styles.cardPopupFallback}>No image found</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -449,7 +446,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 16,
-    paddingVertical: 24,
+    paddingTop: 12,
     paddingBottom: 40,
     maxWidth: 600,
     width: '100%',
@@ -475,6 +472,12 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     textAlign: 'center',
     marginBottom: 16,
+  },
+  refineDivider: {
+    height: 1,
+    backgroundColor: COLOURS.border,
+    width: '100%',
+    marginVertical: 16,
   },
   centeredBlock: {
     alignItems: 'center',
@@ -552,7 +555,7 @@ const styles = StyleSheet.create({
     color: COLOURS.textMuted,
     fontSize: 10,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
     marginTop: 14,
     textTransform: 'uppercase',
     letterSpacing: 3,
@@ -588,65 +591,65 @@ const styles = StyleSheet.create({
   },
   categoryChip: {
     minHeight: 30,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLOURS.chipBorder,
     backgroundColor: COLOURS.surface,
     justifyContent: 'center',
-    maxWidth: '100%',
-  },
-  categoryChipSelected: {
-    backgroundColor: COLOURS.confirm,
-    borderColor: COLOURS.confirm,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
     fontSize: 14,
-  },
-  categoryChipTextSelected: {
     color: COLOURS.textSecondary,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   situationBlock: {
     marginTop: 14,
   },
   situationText: {
-    marginTop: 6,
-    color: COLOURS.text,
+    color: COLOURS.textSecondary,
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 18,
     fontFamily: BODY_FONT,
   },
   rulingText: {
     color: COLOURS.text,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 24,
+    lineHeight: 28,
     fontFamily: BODY_FONT,
   },
   step3RulingSection: {
     backgroundColor: COLOURS.bgRuling,
     borderWidth: 2,
     borderBottomWidth: 2,
-    borderColor: COLOURS.brand,
-    borderBottomColor: COLOURS.brand,
-    borderRadius: 6,
+    borderColor: COLOURS.brandStrong,
+    borderBottomColor: COLOURS.brandStrong,
+    borderRadius: 4,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 16,
   },
   rulingSectionTitle: {
-    color: COLOURS.authority,
-    fontSize: 16,
+    color: COLOURS.brandSoft,
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: 6,
+    letterSpacing: 8,
     textTransform: 'uppercase',
     marginBottom: 8,
     textAlign: 'center',
     fontFamily: TITLE_FONT,
+  },
+  rulingFocusStrip: {
+    alignSelf: 'stretch',
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: COLOURS.brand,
+    marginBottom: 8,
   },
   explanationRow: {
     flexDirection: 'row',
@@ -711,7 +714,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   primaryButton: {
-    marginTop: 24,
     minHeight: 52,
     borderRadius: 10,
     backgroundColor: COLOURS.action,

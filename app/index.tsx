@@ -839,7 +839,8 @@ export default function Index() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,
-          paddingVertical: 24,
+          paddingTop: 12,
+          paddingBottom: 24,
           maxWidth: 600,
           width: '100%',
           alignSelf: 'center',
@@ -859,7 +860,7 @@ export default function Index() {
             Instant rulings for Magic: The Gathering interactions
           </Text>
           <Text style={styles.step1UsageCue}>
-            State the cards. Describe the interaction. Get your answers.
+            Select cards. Describe the interactions. Get answers.
           </Text>
           <View style={styles.refineDivider} />
           <View style={styles.section}>
@@ -1012,7 +1013,7 @@ export default function Index() {
                 !canGoToStep2 && styles.primaryButtonDisabled,
                 pressed && canGoToStep2 && styles.primaryButtonPressed,
               ]}>
-              <Text style={styles.primaryButtonText}>Request Verdict</Text>
+              <Text style={styles.primaryButtonText}>Ask ManaJudge</Text>
             </Pressable>
           </View>
 
@@ -1076,12 +1077,12 @@ export default function Index() {
             </View>
           </View>
 
-          <View style={[styles.section, { borderBottomWidth: 0 }]}>
-            <Text style={styles.stepLabel}>Step 2: Select interaction and/or describe situation</Text>
+          <View style={[styles.section, styles.step2CategorySection, { borderBottomWidth: 0 }]}>
+            <Text style={styles.stepLabel}>Step 2: Select interactions</Text>
             {isCategoriesLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={COLOURS.confirm} />
-                <Text style={styles.loadingText}>Finding likely interactions…</Text>
+                <Text style={styles.loadingText}>Suggesting interactions…</Text>
               </View>
             ) : null}
 
@@ -1100,10 +1101,7 @@ export default function Index() {
                     <Text
                       style={[
                         styles.categoryChipText,
-                        {
-                          color: selected ? COLOURS.textSecondary : COLOURS.textSecondary,
-                          fontWeight: selected ? '700' : '400',
-                        },
+                        selected && styles.categoryChipTextSelected,
                       ]}>
                       {cat}
                     </Text>
@@ -1120,7 +1118,7 @@ export default function Index() {
             <TextInput
               value={situation}
               onChangeText={setSituation}
-              placeholder="Describe the situation (optional)..."
+              placeholder="(optional) Describe the situation..."
               placeholderTextColor={COLOURS.placeholder}
               style={[styles.input, styles.multilineInput]}
               multiline
@@ -1129,27 +1127,26 @@ export default function Index() {
           </View>
 
           <View style={styles.section}>
-            <View style={styles.step2ActionRow}>
+            <View style={styles.step2ActionWrap}>
               <TouchableOpacity
-                style={styles.step2BackButton}
-                onPress={goToStep1}
-              >
-                <Text style={styles.step2BackButtonText}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.step2VerdictButton}
+                style={[
+                  styles.primaryButton,
+                  !canRequestRuling && styles.primaryButtonDisabled,
+                ]}
                 onPress={requestRuling}
-                disabled={!canRequestRuling}
-              >
+                disabled={!canRequestRuling}>
                 {isRulingLoading ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator color={COLOURS.text} />
-                    <Text style={styles.primaryButtonText}>Jury deliberating…</Text>
+                    <Text style={styles.primaryButtonText}>Deliberating…</Text>
                   </View>
                 ) : (
                   <Text style={styles.primaryButtonText}>Get Verdict</Text>
                 )}
               </TouchableOpacity>
+              <Pressable onPress={goToStep1} style={({ pressed }) => [pressed && styles.pressed]}>
+                <Text style={styles.secondaryLinkText}>← reselect cards</Text>
+              </Pressable>
             </View>
 
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -1179,6 +1176,26 @@ export default function Index() {
                     </Pressable>
                   ))}
                 </View>
+                {selectedCategory.length > 0 ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[styles.sectionLabel, { marginTop: 10, marginBottom: 8 }]}>
+                      Interaction / Scenario
+                    </Text>
+                    <View style={styles.chipsRow}>
+                      {selectedCategory.map((cat) => (
+                        <View key={cat} style={[styles.categoryChip, styles.categoryChipSelected]}>
+                          <Text
+                            style={[
+                              styles.categoryChipText,
+                              styles.categoryChipTextSelected,
+                            ]}>
+                            {cat}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
 
               <View
@@ -1186,6 +1203,7 @@ export default function Index() {
                 onLayout={(e) => {
                   rulingCardScrollYRef.current = e.nativeEvent.layout.y;
                 }}>
+                <View style={styles.rulingFocusStrip} />
                 <Text style={styles.rulingSectionTitle}>VERDICT</Text>
                 <Text style={styles.rulingText}>{rulingResult.ruling}</Text>
               </View>
@@ -1269,6 +1287,18 @@ export default function Index() {
                 ) : null}
 
                 <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCards([]);
+                    setCardIndex(0);
+                    goToStep1();
+                  }}
+                  style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>
+                    Ask another question
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   onPress={onShareRuling}
                   disabled={sharing}
                   style={[
@@ -1292,26 +1322,9 @@ export default function Index() {
                     </Text>
                   )}
                 </TouchableOpacity>
-
-                <View style={styles.step2ActionRow}>
-                  <TouchableOpacity
-                    onPress={goToStep2}
-                    style={styles.step2BackButton}>
-                    <Text style={styles.step2BackButtonText}>Back</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedCards([]);
-                      setCardIndex(0);
-                      goToStep1();
-                    }}
-                    style={styles.step2VerdictButton}>
-                    <Text style={styles.primaryButtonText}>
-                      Request another Verdict
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <Pressable onPress={goToStep2} style={({ pressed }) => [pressed && styles.pressed]}>
+                  <Text style={styles.secondaryLinkText}>← Back to context</Text>
+                </Pressable>
 
                 <View style={styles.step3ActionRow}>
 
@@ -1368,7 +1381,11 @@ export default function Index() {
             onPress={() => setActiveStep3Card(null)}
           />
           <View style={styles.cardImageModalCenterLayer} pointerEvents="box-none">
-            <View style={[styles.cardModalImageFrame, { width: cardWidth }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close card image"
+              onPress={() => setActiveStep3Card(null)}
+              style={[styles.cardModalImageFrame, { width: cardWidth }]}>
               {activeStep3Card?.image_uri ? (
                 <Image
                   source={{ uri: activeStep3Card.image_uri }}
@@ -1380,16 +1397,16 @@ export default function Index() {
                   <Text style={styles.cardModalFallbackText}>No image found</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
           </View>
         </View>
       </Modal>
       <Modal transparent animationType="fade" visible={flagModalVisible}>
         <View style={styles.flagModalOverlay}>
           <View style={styles.flagModalCard}>
-            <Text style={styles.flagModalTitle}>Thanks for Appealing</Text>
+            <Text style={styles.flagModalTitle}>Thanks for flagging.</Text>
             <Text style={styles.flagModalSubtitle}>
-              Would you like to tell us what was wrong? (optional)
+              Would you like to tell us what was wrong?
             </Text>
             <TextInput
               value={flagReason}
@@ -1397,7 +1414,7 @@ export default function Index() {
                 flagReasonRef.current = t;
                 setFlagReason(t);
               }}
-              placeholder="What was wrong with the ruling? (optional)"
+              placeholder="What was wrong? (optional)"
               placeholderTextColor={COLOURS.placeholder}
               style={[styles.input, styles.multilineInput, styles.flagModalInput]}
               multiline
@@ -1499,7 +1516,7 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
     textTransform: 'uppercase',
     marginTop: 14,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   featuredLoadingWrap: {
     paddingVertical: 20,
@@ -1515,7 +1532,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLOURS.surface,
   },
   featuredRulingTitle: {
-    color: COLOURS.brandDim,
+    color: COLOURS.brandSoft,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: BODY_FONT,
@@ -1685,7 +1702,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLOURS.border,
+    borderColor: COLOURS.chipBorder,
     backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
@@ -1702,22 +1719,29 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   categoryChip: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLOURS.chipBorder,
-    backgroundColor: COLOURS.bgAccent,
+    backgroundColor: COLOURS.surface,
     justifyContent: 'center',
   },
   categoryChipSelected: {
-    backgroundColor: COLOURS.confirm,
-    borderColor: COLOURS.confirm,
+    backgroundColor: COLOURS.bgAccent,
+    borderColor: COLOURS.bgAccent,
+    borderWidth: 1,
   },
   categoryChipText: {
     fontFamily: BODY_FONT,
     fontSize: 14,
+    color: COLOURS.textSecondary,
+    fontWeight: '500',
+  },
+  categoryChipTextSelected: {
+    color: COLOURS.text,
+    fontWeight: '700',
   },
   primaryButton: {
     minHeight: 52,
@@ -1772,54 +1796,50 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 8,
   },
-  step2ActionRow: {
-    flexDirection: 'row',
-    gap: 8,
+  step2ActionWrap: {
     width: '100%',
+    gap: 12,
+    alignItems: 'stretch',
   },
-  step2BackButton: {
-    flex: 1,
-    backgroundColor: COLOURS.surface,
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+  step2CategorySection: {
+    marginBottom: 10,
+    paddingBottom: 10,
   },
-  step2BackButtonText: {
-    color: COLOURS.textSecondary,
-    fontSize: 16,
-  },
-  step2VerdictButton: {
-    flex: 3,
-    backgroundColor: COLOURS.action,
-    borderRadius: 10,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
+  secondaryLinkText: {
+    color: COLOURS.textMuted,
+    fontSize: 15,
+    fontFamily: BODY_FONT,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   step3RulingSection: {
     backgroundColor: COLOURS.bgRuling,
     borderWidth: 2,
     borderBottomWidth: 2,
-    borderColor: COLOURS.brand,
-    borderBottomColor: COLOURS.brand,
-    borderRadius: 6,
+    borderColor: COLOURS.brandStrong,
+    borderBottomColor: COLOURS.brandStrong,
+    borderRadius: 4,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   rulingSectionTitle: {
     color: COLOURS.brandSoft,
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: 6,
+    letterSpacing: 8,
     textTransform: 'uppercase',
     marginBottom: 8,
     textAlign: 'center',
     fontFamily: TITLE_FONT,
+  },
+  rulingFocusStrip: {
+    alignSelf: 'stretch',
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: COLOURS.brand,
+    marginBottom: 8,
   },
   step3FlagConfirmationWrap: {
     width: '100%',
@@ -1868,9 +1888,9 @@ const styles = StyleSheet.create({
   },
   rulingText: {
     color: COLOURS.text,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 24,
+    lineHeight: 28,
     fontFamily: BODY_FONT,
   },
   explanationText: {
