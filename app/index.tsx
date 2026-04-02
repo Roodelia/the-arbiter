@@ -1318,16 +1318,21 @@ export default function Index() {
                     </Text>
                   ) : (
                     <Text style={styles.shareButtonText}>
-                      Share this ruling
+                      Share this verdict
                     </Text>
                   )}
                 </TouchableOpacity>
-                <Pressable onPress={goToStep2} style={({ pressed }) => [pressed && styles.pressed]}>
-                  <Text style={styles.secondaryLinkText}>← Back to context</Text>
-                </Pressable>
+                <View style={styles.step3SecondaryLinkAndFlag}>
+                  <Pressable
+                    onPress={goToStep2}
+                    style={({ pressed }) => [
+                      styles.step3SecondaryLinkPressable,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text style={styles.secondaryLinkText}>← Describe the scenario again</Text>
+                  </Pressable>
 
-                <View style={styles.step3ActionRow}>
-
+                  <View style={styles.step3ActionRow}>
                   {flagged ? (
                     <View style={styles.step3FlagConfirmationWrap}>
                       <Text style={styles.flagConfirmText}>✓ Verdict flagged. Thank you.</Text>
@@ -1351,6 +1356,7 @@ export default function Index() {
                       )}
                     </Pressable>
                   )}
+                  </View>
                 </View>
 
                 {shareError ? <Text style={styles.flagErrorText}>{shareError}</Text> : null}
@@ -1790,6 +1796,16 @@ const styles = StyleSheet.create({
   step3ActionStack: {
     width: '100%',
     gap: 8,
+  },
+  step3SecondaryLinkAndFlag: {
+    width: '100%',
+    gap: 8,
+    alignItems: 'stretch',
+  },
+  step3SecondaryLinkPressable: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   step3ActionRow: {
     flexDirection: 'row',

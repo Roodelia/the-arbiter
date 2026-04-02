@@ -9,6 +9,35 @@ const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
 const CR_VERSION = process.env.CR_VERSION || "unknown";
 
+async function sendTelegramAlert({ cards, situation, ruling }) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const cardNames = cards?.map(c => c.name).join(', ') || 'No cards';
+  const situation_text = situation?.slice(0, 100) || '';
+  const ruling_text = ruling?.slice(0, 600) || '';
+  const text = [
+    '⚖️ *New ManaJudge Case*',
+    `🃏 Cards: ${cardNames}`,
+    situation_text ? `📝 ${situation_text}` : '',
+    ruling_text ? `\n📜 *Ruling:*\n${ruling_text}` : '',
+  ].filter(Boolean).join('\n');
+
+  await fetch(
+    `https://api.telegram.org/bot${token}/sendMessage`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    }
+  ).catch(err => console.error('Telegram alert failed:', err));
+}
+
 const EXPANSION_BLOCKLIST = new Set(["704.5", "111.10", "205.3","703.4","607.2","800.4","113.6","112.1","104.3","807.4"]);
 
 function cosineSimilarity(a, b) {
@@ -621,6 +650,8 @@ ${contextSection}`;
       console.error("Unexpected AI response format:", rawText);
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
+
+    await sendTelegramAlert({ cards: req.body.cards, situation: req.body.situation, ruling });
 
     if (case_id && ragMatches?.length) {
       supabase
