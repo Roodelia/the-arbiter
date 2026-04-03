@@ -22,7 +22,8 @@ export const COLOURS = {
   confirm:        '#1F3D36',   // share button fill, selected category chip fill
 
   // Text hierarchy
-  text:           '#f0f0f0',   // primary text, button text on dark fills
+  text:           '#D2D5DC',   // primary text — between textLight and textSecondary
+  textLight:      '#f0f0f0',   // light text, used for section labels
   textSecondary:  '#A0A6B0',   // card chip text, helper text, step labels, tertiary button text
   textMuted:      '#6F7682',   // section labels, chevrons, placeholders
   textInverted:   '#0b0a1a',   // inverted text

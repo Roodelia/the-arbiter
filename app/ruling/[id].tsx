@@ -13,6 +13,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -275,7 +276,7 @@ export default function SharedRulingScreen() {
                       onPress={() => setActiveCardPopup(name)}
                       style={({ pressed }) => [
                         styles.readOnlyChip,
-                        pressed && styles.chipPressed,
+                        pressed && styles.pressed,
                         Platform.OS === 'web' && styles.readOnlyChipWeb,
                       ]}>
                       <Text style={styles.chipText} numberOfLines={1}>
@@ -318,7 +319,7 @@ export default function SharedRulingScreen() {
             <View style={[styles.section, { paddingBottom: 0 }]}>
               <Pressable
                 onPress={() => setIsExplanationOpen((prev) => !prev)}
-                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.chipPressed]}>
+                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.pressed]}>
                 <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
                   EXPLANATION
                 </Text>
@@ -351,7 +352,7 @@ export default function SharedRulingScreen() {
                 : null}
               <Pressable
                 onPress={() => setIsRulesOpen((prev) => !prev)}
-                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.chipPressed]}>
+                style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.pressed]}>
                 <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>
                   RULES CITED
                 </Text>
@@ -406,36 +407,52 @@ export default function SharedRulingScreen() {
           <View
             style={styles.cardImageModalCenterLayer}
             pointerEvents="box-none">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close card image"
-              onPress={() => setActiveCardPopup(null)}
-              style={[styles.cardModalImageFrame, { width: cardPreviewWidth }]}>
-              {modalShowLoading ? (
-                <View style={styles.cardModalSpinnerWrap}>
-                  <ActivityIndicator
-                    color={COLOURS.brand}
-                    size="large"
+            <View style={[styles.cardModalImageFrame, { width: cardPreviewWidth }]}>
+              <View style={styles.cardModalImageClip}>
+                {modalShowLoading ? (
+                  <View style={styles.cardModalSpinnerWrap}>
+                    <ActivityIndicator
+                      color={COLOURS.brand}
+                      size="large"
+                    />
+                  </View>
+                ) : modalCachedUri ? (
+                  <Image
+                    source={{ uri: modalCachedUri }}
+                    style={styles.cardModalImage}
+                    resizeMode="cover"
                   />
-                </View>
-              ) : modalCachedUri ? (
-                <Image
-                  source={{ uri: modalCachedUri }}
-                  style={styles.cardModalImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.cardModalSpinnerWrap}>
-                  <Text style={styles.cardPopupFallback}>No image found</Text>
-                </View>
-              )}
-            </Pressable>
+                ) : (
+                  <View style={styles.cardModalFallbackWrap}>
+                    <Text style={styles.cardModalFallbackText}>No image found</Text>
+                  </View>
+                )}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close card image"
+                onPress={() => setActiveCardPopup(null)}
+                style={styles.cardModalImagePressOverlay}
+              />
+            </View>
           </View>
         </View>
       </Modal>
     </View>
   );
 }
+
+/** Same layout base as app/index.tsx primary CTAs. */
+const primaryActionButton: ViewStyle = {
+  width: '100%',
+  minHeight: 52,
+  borderRadius: 10,
+  borderWidth: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 16,
+  paddingVertical: 14,
+};
 
 const styles = StyleSheet.create({
   root: {
@@ -447,7 +464,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 40,
+    paddingBottom: 24,
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
@@ -477,7 +494,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLOURS.border,
     width: '100%',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   centeredBlock: {
     alignItems: 'center',
@@ -487,9 +504,9 @@ const styles = StyleSheet.create({
   },
   loadingCaption: {
     color: COLOURS.textMuted,
-    fontSize: 14,
+    fontWeight: '700',
     fontFamily: BODY_FONT,
-    fontWeight: '600',
+    fontSize: 14,
   },
   errorText: {
     marginTop: 10,
@@ -498,9 +515,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: BODY_FONT,
     fontSize: 14,
-    textAlign: 'center',
   },
-  chipPressed: {
+  pressed: {
     opacity: 0.85,
   },
   cardImageModalRoot: {
@@ -517,11 +533,21 @@ const styles = StyleSheet.create({
   },
   cardModalImageFrame: {
     aspectRatio: 63 / 88,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: COLOURS.background,
+    backgroundColor: COLOURS.surface,
     borderWidth: 1,
     borderColor: COLOURS.border,
+    position: 'relative',
+  },
+  cardModalImageClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { isolation: 'isolate' as const } : {}),
+  },
+  cardModalImagePressOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   cardModalSpinnerWrap: {
     flex: 1,
@@ -533,17 +559,24 @@ const styles = StyleSheet.create({
   cardModalImage: {
     width: '100%',
     height: '100%',
+    backgroundColor: 'transparent',
   },
-  cardPopupFallback: {
+  cardModalFallbackWrap: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  cardModalFallbackText: {
     color: COLOURS.textMuted,
     fontSize: 14,
     fontFamily: BODY_FONT,
-    paddingVertical: 20,
     textAlign: 'center',
   },
   section: {
-    marginBottom: 20,
-    paddingBottom: 20,
+    marginBottom: 16,
+    paddingBottom: 16,
     borderBottomWidth: 0,
     borderBottomColor: COLOURS.border,
   },
@@ -552,30 +585,28 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionLabel: {
-    color: COLOURS.textMuted,
-    fontSize: 10,
+    color: COLOURS.textSecondary,
     fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 14,
-    textTransform: 'uppercase',
     letterSpacing: 3,
+    fontSize: 10,
     fontFamily: BODY_FONT,
+    textTransform: 'uppercase',
+    marginTop: 14,
+    marginBottom: 6,
   },
   chipsRow: {
-    marginTop: 4,
+    marginTop: 0,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    overflow: 'visible',
   },
   readOnlyChip: {
     alignSelf: 'flex-start',
-    minHeight: 30,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLOURS.border,
+    borderColor: COLOURS.chipBorder,
     backgroundColor: COLOURS.surface,
     justifyContent: 'center',
     maxWidth: '100%',
@@ -615,7 +646,7 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   rulingText: {
-    color: COLOURS.text,
+    color: COLOURS.textLight,
     fontSize: 18,
     fontWeight: '600',
     lineHeight: 28,
@@ -631,7 +662,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-    marginTop: 16,
     marginBottom: 16,
   },
   rulingSectionTitle: {
@@ -653,13 +683,15 @@ const styles = StyleSheet.create({
   },
   explanationRow: {
     flexDirection: 'row',
-    marginBottom: 6,
+    marginTop: 8,
+    marginBottom: 0,
     paddingRight: 8,
   },
   explanationText: {
     color: COLOURS.text,
     fontSize: 14,
-    lineHeight: 22,
+    lineHeight: 20,
+    marginBottom: 2,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   explanationBullet: {
@@ -670,21 +702,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rulesRow: {
-    marginTop: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginTop: 8,
   },
   collapsibleHeader: {
     marginTop: 14,
-    marginBottom: 8,
+    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 6,
   },
   collapsibleChevron: {
-    color: COLOURS.confirm,
+    color: COLOURS.text,
     fontSize: 14,
     lineHeight: 14,
     fontFamily: BODY_FONT,
@@ -714,13 +746,9 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   primaryButton: {
-    minHeight: 52,
-    borderRadius: 10,
+    ...primaryActionButton,
+    borderColor: COLOURS.action,
     backgroundColor: COLOURS.action,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
   },
   primaryButtonPressed: {
     opacity: 0.9,
@@ -729,7 +757,6 @@ const styles = StyleSheet.create({
     color: COLOURS.text,
     fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 1,
     fontFamily: BODY_FONT,
   },
 });

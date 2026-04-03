@@ -345,13 +345,13 @@ app.post("/categories", async (req, res) => {
     const systemPrompt = `You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant SPECIFIC interaction categories a player would likely need a ruling on when these cards are on the battlefield together or being cast in sequence.
 
 Rules for generating categories:
+- Each category must be 5 words or fewer. Never use full sentences or long descriptive labels.
 - Focus on card-to-card INTERACTIONS, not individual card mechanics in isolation
-- Be specific: "Loyalty counter doubling" not "Counters", "ETB trigger timing with flash" not "Triggered abilities"
 - Think about what causes confusion or disputes at the table with these specific cards
 - If cards share a mechanic, call out the specific interaction (e.g., "Multiple replacement effects on damage")
 - For a single card, focus on the most commonly misunderstood or disputed aspects of that card
 
-Respond ONLY with a valid JSON array of 3-5 short category label strings. No preamble, no markdown, just the raw JSON array.`;
+Respond ONLY with a valid JSON array of 3-5 short category label strings with max of 5 words each. No preamble, no markdown, just the raw JSON array.`;
 
     const oracleBlock = buildOracleBlock(oracleData, { includeStats: false });
 

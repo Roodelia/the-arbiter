@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
 
 type ScryfallAutocompleteResponse = {
@@ -859,7 +860,7 @@ export default function Index() {
           <Text style={styles.step1Tagline}>
             Instant rulings for Magic: The Gathering interactions
           </Text>
-          <Text style={styles.step1UsageCue}>
+          <Text style={styles.textDescription}>
             Select cards. Describe the interactions. Get answers.
           </Text>
           <View style={styles.refineDivider} />
@@ -867,15 +868,35 @@ export default function Index() {
             <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
             {selectedCards.length < MAX_CARDS ? (
               <View style={styles.searchRow}>
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search for a card..."
-                  placeholderTextColor={COLOURS.textMuted}
-                  style={[styles.input, styles.searchInput]}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                />
+                <View style={styles.searchComposer}>
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search for a card..."
+                    placeholderTextColor={COLOURS.textMuted}
+                    style={[styles.input, styles.searchInput, styles.searchComposerInput]}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                  {suggestions.length > 0 ? (
+                    <View style={styles.suggestions}>
+                      {suggestions.map((s, index) => (
+                        <Pressable
+                          key={s}
+                          onPress={() => addCard(s)}
+                          style={({ pressed }) => [
+                            styles.suggestionRow,
+                            index > 0 && styles.suggestionRowDivider,
+                            pressed && styles.pressed,
+                          ]}>
+                          <Text style={styles.suggestionText}>
+                            {s}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
               </View>
             ) : (
               <Text style={styles.helperHint}>4 cards maximum — remove one to add another</Text>
@@ -885,24 +906,6 @@ export default function Index() {
               <Text style={styles.helperHint}>{maxCardsError}</Text>
             ) : null}
 
-            {suggestions.length > 0 && selectedCards.length < MAX_CARDS ? (
-              <View style={styles.suggestions}>
-                {suggestions.map((s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => addCard(s)}
-                    style={({ pressed }) => [
-                      styles.suggestionRow,
-                      pressed && styles.pressed,
-                    ]}>
-                    <Text style={styles.suggestionText}>
-                      {s}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-
             {!canGoToStep2 ? (
               <Text style={styles.helperHint}>
                 Add at least 1 card to continue.
@@ -910,7 +913,7 @@ export default function Index() {
             ) : null}
 
             {selectedCards.length > 0 ? (
-              <View style={styles.chipsRow}>
+              <View style={[styles.chipsRow, styles.step1ChipsRow]}>
                 {selectedCards.map((card) => (
                   <Pressable
                     key={card.name}
@@ -936,24 +939,24 @@ export default function Index() {
                   <View pointerEvents="box-only">
                     <Animated.View
                       {...panResponder.panHandlers}
-                      style={{
-                        opacity: cardFadeOpacity,
-                        width: '100%',
-                        aspectRatio: 63 / 88,
-                      }}>
-                    {selectedCards[cardIndex]?.image_uri ? (
-                      <Image
-                        source={{ uri: selectedCards[cardIndex]!.image_uri as string }}
-                        style={{
+                      style={[
+                        styles.cardModalImageFrame,
+                        {
                           width: '100%',
-                          height: '100%',
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: COLOURS.border,
-                        }}
-                        resizeMode="cover"
-                      />
-                    ) : null}
+                          opacity: cardFadeOpacity,
+                        },
+                      ]}>
+                      <View style={styles.cardModalImageClip}>
+                        {selectedCards[cardIndex]?.image_uri ? (
+                          <Image
+                            source={{
+                              uri: selectedCards[cardIndex]!.image_uri as string,
+                            }}
+                            style={styles.cardModalImage}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+                      </View>
                     </Animated.View>
                   </View>
 
@@ -1178,7 +1181,7 @@ export default function Index() {
                 </View>
                 {selectedCategory.length > 0 ? (
                   <View style={{ marginTop: 10 }}>
-                    <Text style={[styles.sectionLabel, { marginTop: 10, marginBottom: 8 }]}>
+                    <Text style={[styles.sectionLabel, { marginTop: 10 }]}>
                       Interaction / Scenario
                     </Text>
                     <View style={styles.chipsRow}>
@@ -1387,23 +1390,27 @@ export default function Index() {
             onPress={() => setActiveStep3Card(null)}
           />
           <View style={styles.cardImageModalCenterLayer} pointerEvents="box-none">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close card image"
-              onPress={() => setActiveStep3Card(null)}
-              style={[styles.cardModalImageFrame, { width: cardWidth }]}>
-              {activeStep3Card?.image_uri ? (
-                <Image
-                  source={{ uri: activeStep3Card.image_uri }}
-                  style={styles.cardModalImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.cardModalFallbackWrap}>
-                  <Text style={styles.cardModalFallbackText}>No image found</Text>
-                </View>
-              )}
-            </Pressable>
+            <View style={[styles.cardModalImageFrame, { width: cardWidth }]}>
+              <View style={styles.cardModalImageClip}>
+                {activeStep3Card?.image_uri ? (
+                  <Image
+                    source={{ uri: activeStep3Card.image_uri }}
+                    style={styles.cardModalImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.cardModalFallbackWrap}>
+                    <Text style={styles.cardModalFallbackText}>No image found</Text>
+                  </View>
+                )}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close card image"
+                onPress={() => setActiveStep3Card(null)}
+                style={styles.cardModalImagePressOverlay}
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -1470,6 +1477,18 @@ export default function Index() {
   );
 }
 
+/** Shared layout for full-width primary CTAs; only border/background differ per variant. */
+const primaryActionButton: ViewStyle = {
+  width: '100%',
+  minHeight: 52,
+  borderRadius: 10,
+  borderWidth: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 16,
+  paddingVertical: 14,
+};
+
 const styles = StyleSheet.create({
   container: {
     padding: 16,
@@ -1486,13 +1505,13 @@ const styles = StyleSheet.create({
     fontFamily: TITLE_FONT,
   },
   section: {
-    marginBottom: 20,
-    paddingBottom: 20,
+    marginBottom: 16,
+    paddingBottom: 16,
     borderBottomWidth: 0,
     borderBottomColor: COLOURS.border,
   },
   stepLabel: {
-    color: COLOURS.textSecondary,
+    color: COLOURS.textLight,
     fontSize: 10,
     fontWeight: '700',
     marginBottom: 8,
@@ -1507,7 +1526,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  step1UsageCue: {
+  textDescription: {
     color: COLOURS.text,
     fontSize: 14,
     fontFamily: 'sans-serif',
@@ -1515,7 +1534,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionLabel: {
-    color: COLOURS.textMuted,
+    color: COLOURS.textSecondary,
     fontWeight: '600',
     letterSpacing: 3,
     fontSize: 10,
@@ -1551,7 +1570,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   step1ActionSection: {
-    marginBottom: 4,
+    marginBottom: 12,
     paddingBottom: 4,
   },
   step1FeaturedSection: {
@@ -1563,6 +1582,19 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: 'center',
   },
+  searchComposer: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.surface,
+    overflow: 'hidden',
+  },
+  searchComposerInput: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
   input: {
     flex: 1,
     minHeight: 44,
@@ -1571,7 +1603,7 @@ const styles = StyleSheet.create({
     borderColor: COLOURS.border,
     backgroundColor: COLOURS.surface,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 6,
     color: COLOURS.text,
     fontSize: 16,
     fontFamily: BODY_FONT,
@@ -1581,7 +1613,7 @@ const styles = StyleSheet.create({
   },
   multilineInput: {
     minHeight: 100,
-    padding: 14,
+    padding: 6,
   },
   flagModalOverlay: {
     flex: 1,
@@ -1628,7 +1660,7 @@ const styles = StyleSheet.create({
   },
   cardImageModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor:'rgba(0,0,0,0.85)',
   },
   cardImageModalCenterLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -1637,15 +1669,26 @@ const styles = StyleSheet.create({
   },
   cardModalImageFrame: {
     aspectRatio: 63 / 88,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: COLOURS.background,
+    backgroundColor: COLOURS.surface,
     borderWidth: 1,
     borderColor: COLOURS.border,
+    position: 'relative',
+  },
+  cardModalImageClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? { isolation: 'isolate' as const } : {}),
+  },
+  cardModalImagePressOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   cardModalImage: {
     width: '100%',
     height: '100%',
+    backgroundColor: 'transparent',
   },
   cardModalFallbackWrap: {
     flex: 1,
@@ -1678,19 +1721,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   suggestions: {
-    marginTop: 10,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLOURS.border,
-    backgroundColor: COLOURS.surface,
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+    backgroundColor: 'transparent',
   },
   suggestionRow: {
     minHeight: 44,
     paddingHorizontal: 12,
     justifyContent: 'center',
-    borderTopWidth: 0,
-    borderTopColor: 'transparent',
+  },
+  suggestionRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
   },
   suggestionText: {
     color: COLOURS.text,
@@ -1698,10 +1740,13 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
   },
   chipsRow: {
-    marginTop: 4,
+    marginTop: 0,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  step1ChipsRow: {
+    marginTop: 6,
   },
   cardChip: {
     paddingHorizontal: 12,
@@ -1720,7 +1765,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   cardChipRemoveMark: {
-    color: COLOURS.action,
+    color: COLOURS.error,
     fontWeight: 'bold',
     fontFamily: BODY_FONT,
   },
@@ -1750,13 +1795,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   primaryButton: {
-    minHeight: 52,
-    borderRadius: 10,
+    ...primaryActionButton,
+    borderColor: COLOURS.action,
     backgroundColor: COLOURS.action,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
   },
   primaryButtonDisabled: {
     opacity: 0.5,
@@ -1903,7 +1944,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rulingText: {
-    color: COLOURS.text,
+    color: COLOURS.textLight,
     fontSize: 18,
     fontWeight: '600',
     lineHeight: 28,
@@ -1912,8 +1953,8 @@ const styles = StyleSheet.create({
   explanationText: {
     color: COLOURS.text,
     fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 6,
+    lineHeight: 20,
+    marginBottom: 2,
     fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   rulesRow: {
@@ -1924,14 +1965,14 @@ const styles = StyleSheet.create({
   },
   collapsibleHeader: {
     marginTop: 14,
-    marginBottom: 8,
+    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 6,
   },
   collapsibleChevron: {
-    color: COLOURS.confirm,
+    color: COLOURS.text,
     fontSize: 14,
     lineHeight: 14,
     fontFamily: BODY_FONT,
@@ -1957,7 +1998,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLOURS.border,
     width: '100%',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   refineErrorText: {
     color: COLOURS.error,
@@ -1994,17 +2035,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   shareButton: {
-    width: '100%',
-    marginTop: 0,
-    minHeight: 52,
-    borderRadius: 10,
-    borderWidth: 1,
+    ...primaryActionButton,
     borderColor: COLOURS.confirm,
     backgroundColor: COLOURS.confirm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
   },
   flagTextAction: {
     color: COLOURS.error,
@@ -2014,7 +2047,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   shareButtonText: {
-    color: COLOURS.textSecondary,
+    color: COLOURS.text,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: BODY_FONT,
