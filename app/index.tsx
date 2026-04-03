@@ -135,9 +135,14 @@ type RulingResponse = {
 };
 
 type SelectedCard = {
+  id: string;
   name: string;
   image_uri: string | null;
 };
+
+function newSelectedCardId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
 const MAX_CARDS = 4;
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL 
@@ -257,6 +262,56 @@ export default function Index() {
   const caseId = useRef(generateId());
   const { width } = useWindowDimensions();
   const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
+
+  // Step 1 card grid sizing:
+  // Measured width of the card grid container (drives sizing calculations).
+  const [cardSectionWidth, setCardSectionWidth] = useState(0);
+  const cardAspectRatio = 63 / 88; // width / height
+  const getCardGridMetrics = (count: number) => {
+    if (count <= 0) return { height: 0, numColumns: 1 };
+
+    if (count === 1) {
+      // Match the per-card width used in a 2-card row (including the 8px gap).
+      const cardWidthForSingle = Math.floor((cardSectionWidth - 8) / 2);
+      const cardHeight = cardWidthForSingle / cardAspectRatio;
+      return { height: cardHeight, numColumns: 1 };
+    }
+
+    if (count === 4) {
+      const cardWidthFor2 = Math.max(0, (cardSectionWidth - 8) / 2);
+      const cardHeightFor2 = cardWidthFor2 / cardAspectRatio;
+      const numColumns = cardHeightFor2 >= 200 ? 2 : 1;
+      const finalWidth = numColumns === 1 ? cardSectionWidth : cardWidthFor2;
+      return { height: finalWidth / cardAspectRatio, numColumns };
+    }
+
+    // 2 or 3 cards: fill full width in one row; if that makes height < 200,
+    // drop to fewer columns (1 for 2 cards, 2 for 3 cards).
+    const gap = (count - 1) * 8;
+    const availableWidth = Math.max(0, cardSectionWidth - gap);
+    const cardWidth = availableWidth / count;
+    const cardHeight = cardWidth / cardAspectRatio;
+    const numColumns = cardHeight >= 200 ? count : count === 2 ? 1 : 2;
+
+    const finalWidth =
+      numColumns === count
+        ? cardWidth
+        : numColumns === 1
+          ? cardSectionWidth
+          : Math.max(0, (cardSectionWidth - 8) / 2);
+
+    return { height: finalWidth / cardAspectRatio, numColumns };
+  };
+
+  const { height: step1CardGridHeight, numColumns: step1NumColumns } =
+    getCardGridMetrics(selectedCards.length);
+  const step1CardGridWidth =
+    step1NumColumns === 1
+      ? Math.min(cardSectionWidth, step1CardGridHeight * cardAspectRatio)
+      : Math.floor(
+          (cardSectionWidth - (step1NumColumns - 1) * 8) / step1NumColumns
+        );
+
   const rulingCardScrollYRef = useRef(0);
 
   const autocompleteAbortRef = useRef<AbortController | null>(null);
@@ -403,10 +458,10 @@ export default function Index() {
           return prev;
         }
 
-        const updated = [...prev, { name: cardName, image_uri: null }].slice(
-          0,
-          MAX_CARDS
-        );
+        const updated = [
+          ...prev,
+          { id: newSelectedCardId(), name: cardName, image_uri: null },
+        ].slice(0, MAX_CARDS);
         setMaxCardsError(null);
         return updated;
       });
@@ -440,12 +495,12 @@ export default function Index() {
     setStep((prev) => (prev === 3 ? 2 : prev));
   }, []);
 
-  const handleDeselectCard = useCallback(
-    (cardName: string) => {
-      removeCard(cardName);
-    },
-    [removeCard]
-  );
+  const handleDeselectCard = useCallback((id: string) => {
+    setSelectedCards((prev) => prev.filter((c) => c.id !== id));
+    setMaxCardsError(null);
+    setRulingResult(null);
+    setStep((prev) => (prev === 3 ? 2 : prev));
+  }, []);
 
   const toggleCategory = useCallback((category: string) => {
     setSelectedCategory((prev) =>
@@ -813,7 +868,7 @@ export default function Index() {
             Select cards. Describe the interactions. Get answers.
           </Text>
           <View style={styles.refineDivider} />
-          <View style={styles.section}>
+          <View style={[styles.section, styles.step1Section]}>
             <Text style={styles.stepLabel}>Step 1: Specify cards</Text>
             {selectedCards.length < MAX_CARDS ? (
               <View style={styles.searchRow}>
@@ -861,35 +916,41 @@ export default function Index() {
               </Text>
             ) : null}
 
-            {selectedCards.length > 0 ? (
-              <View style={[styles.chipsRow, styles.step1ChipsRow]}>
-                {selectedCards.map((card) => (
-                  <Pressable
-                    key={card.name}
-                    onPress={() => removeCard(card.name)}
-                    style={({ pressed }) => [styles.cardChip, pressed && styles.pressed]}>
-                    <Text style={styles.cardChipText} numberOfLines={1}>
-                      {card.name} {'  '}
-                      <Text style={styles.cardChipRemoveMark}>×</Text>
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
+            {/* Step 1 intentionally hides selected-card chips (cards shown in the grid below). */}
 
-            {selectedCards.length > 0 ? (
-              <View style={styles.cardGrid}>
-                {selectedCards.map((card) => (
-                  <View key={card.name} style={styles.cardGridItem}>
+            {selectedCards.length > 0 && (
+              <View
+                style={[styles.cardGrid, { width: '100%' }]}
+                onLayout={(e) =>
+                  setCardSectionWidth(
+                    e.nativeEvent.layout.width !== cardSectionWidth
+                      ? e.nativeEvent.layout.width
+                      : cardSectionWidth
+                  )
+                }>
+                {selectedCards.map((card, index) => (
+                  <View
+                    key={card.id}
+                    style={[
+                      styles.cardGridItem,
+                      {
+                        width: step1CardGridWidth,
+                        height: step1CardGridHeight,
+                        marginRight:
+                          index % step1NumColumns === step1NumColumns - 1
+                            ? 0
+                            : 8,
+                      },
+                    ]}>
                     <Pressable
                       style={styles.cardGridDeselect}
-                      onPress={() => handleDeselectCard(card.name)}
+                      onPress={() => handleDeselectCard(card.id)}
                       accessibilityRole="button"
                       accessibilityLabel={`Remove ${card.name}`}>
                       <Text style={styles.cardGridDeselectText}>✕</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.cardGridImagePress}
+                      style={{ width: '100%', height: '100%' }}
                       onPress={() => setActiveStep3Card(card)}
                       accessibilityRole="button"
                       accessibilityLabel={`Open card image for ${card.name}`}>
@@ -900,16 +961,21 @@ export default function Index() {
                           resizeMode="cover"
                         />
                       ) : (
-                        <View style={styles.cardGridImagePlaceholder} />
+                        <View
+                          style={[
+                            styles.cardGridImage,
+                            { backgroundColor: COLOURS.surface },
+                          ]}
+                        />
                       )}
                     </Pressable>
                   </View>
                 ))}
               </View>
-            ) : null}
+            )}
           </View>
 
-          <View style={[styles.section, styles.step1ActionSection]}>
+          <View style={[styles.section, styles.step1ActionSection, styles.actionButtonWrapper]}>
             <Pressable
               onPress={() => {
                 void logCase({ cards: selectedCards.map((c) => c.name) });
@@ -1413,6 +1479,15 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 0,
     borderBottomColor: COLOURS.border,
+    zIndex: 1,
+  },
+  step1Section: {
+    position: 'relative',
+    zIndex: 10,
+  },
+  actionButtonWrapper: {
+    position: 'relative',
+    zIndex: 1,
   },
   stepLabel: {
     color: COLOURS.textLight,
@@ -1485,6 +1560,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     alignItems: 'center',
+    zIndex: 100,
   },
   searchComposer: {
     flex: 1,
@@ -1492,7 +1568,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLOURS.border,
     backgroundColor: COLOURS.surface,
-    overflow: 'hidden',
+    overflow: 'visible',
+    position: 'relative',
+    zIndex: 100,
   },
   searchComposerInput: {
     borderWidth: 0,
@@ -1625,9 +1703,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   suggestions: {
+    position: 'absolute',
+    top: '100%', // sits just below the TextInput
+    left: 0,
+    right: 0,
+    zIndex: 200,
+    elevation: 10,
+    backgroundColor: COLOURS.surface, // must be opaque
+    borderRadius: 8,
+    marginTop: 4,
     borderTopWidth: 1,
     borderTopColor: COLOURS.border,
-    backgroundColor: 'transparent',
   },
   suggestionRow: {
     minHeight: 44,
@@ -1838,7 +1924,7 @@ const styles = StyleSheet.create({
     fontFamily: 'serif',
     textAlign: 'center',
     fontSize: 14,
-    marginTop: 8,
+    marginTop: 10,
   },
   helperText: {
     color: COLOURS.textMuted,
@@ -1961,35 +2047,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
     marginTop: 12,
     marginBottom: 4,
   },
   cardGridItem: {
-    position: 'relative',
-    height: 255,
-    aspectRatio: 63 / 88,
     borderRadius: 6,
-    overflow: 'hidden',
-  },
-  cardGridImagePress: {
-    ...StyleSheet.absoluteFillObject,
+    overflow: 'visible',
+    position: 'relative',
   },
   cardGridImage: {
     width: '100%',
     height: '100%',
     borderRadius: 6,
-    backgroundColor: 'transparent',
-  },
-  cardGridImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: COLOURS.surface,
   },
   cardGridDeselect: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: -2,
+    right: -2,
     zIndex: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 99,
@@ -1999,10 +2073,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardGridDeselectText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    color: COLOURS.error,
+    fontSize: 14,
     fontWeight: '700',
-    lineHeight: 14,
+    lineHeight: 16,
   },
   pressed: {
     opacity: 0.85,
