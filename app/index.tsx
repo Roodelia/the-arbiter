@@ -6,10 +6,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Image,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -259,8 +257,6 @@ export default function Index() {
   const caseId = useRef(generateId());
   const { width } = useWindowDimensions();
   const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
-  const [cardIndex, setCardIndex] = useState(0);
-  const cardFadeOpacity = useRef(new Animated.Value(1)).current;
   const rulingCardScrollYRef = useRef(0);
 
   const autocompleteAbortRef = useRef<AbortController | null>(null);
@@ -337,35 +333,6 @@ export default function Index() {
     };
   }, []);
 
-  const prevSelectedCardsLengthRef = useRef(selectedCards.length);
-  useEffect(() => {
-    // Reset to the first card when cards are removed; when cards are added,
-    // jump to the newly-added (last) card.
-    if (selectedCards.length > prevSelectedCardsLengthRef.current) {
-      setCardIndex(selectedCards.length - 1);
-    } else {
-      setCardIndex(0);
-    }
-    prevSelectedCardsLengthRef.current = selectedCards.length;
-  }, [selectedCards.length]);
-
-  useEffect(() => {
-    if (selectedCards.length <= 1) return;
-
-    Animated.timing(cardFadeOpacity, {
-      toValue: 0,
-      duration: 100,
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (!finished) return;
-      Animated.timing(cardFadeOpacity, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }).start();
-    });
-  }, [cardIndex, cardFadeOpacity, selectedCards.length]);
-
   const logCase = async (data: Record<string, unknown>) => {
     try {
       await fetch(`${BACKEND_BASE_URL}/log`, {
@@ -441,7 +408,6 @@ export default function Index() {
           MAX_CARDS
         );
         setMaxCardsError(null);
-        setCardIndex(updated.length - 1);
         return updated;
       });
 
@@ -473,6 +439,13 @@ export default function Index() {
     setRulingResult(null);
     setStep((prev) => (prev === 3 ? 2 : prev));
   }, []);
+
+  const handleDeselectCard = useCallback(
+    (cardName: string) => {
+      removeCard(cardName);
+    },
+    [removeCard]
+  );
 
   const toggleCategory = useCallback((category: string) => {
     setSelectedCategory((prev) =>
@@ -801,30 +774,6 @@ export default function Index() {
     setStep(2);
   }, []);
 
-  const swipeThreshold = 20;
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (_, gestureState) => {
-        return true;
-      },
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -swipeThreshold) {
-          // Swipe left — go to next card
-          setCardIndex((prev) =>
-            prev < selectedCards.length - 1 ? prev + 1 : prev
-          );
-        } else if (gestureState.dx > swipeThreshold) {
-          // Swipe right — go to previous card
-          setCardIndex((prev) => (prev > 0 ? prev - 1 : prev));
-        }
-      },
-    })
-  ).current;
-
   return (
     <View
       style={{
@@ -929,77 +878,33 @@ export default function Index() {
             ) : null}
 
             {selectedCards.length > 0 ? (
-              <View style={{ width: '100%', alignItems: 'center', marginTop: 12 }}>
-                <View
-                  style={{
-                    width: cardWidth,
-                    position: 'relative',
-                    overflow: 'visible',
-                  }}>
-                  <View pointerEvents="box-only">
-                    <Animated.View
-                      {...panResponder.panHandlers}
-                      style={[
-                        styles.cardModalImageFrame,
-                        {
-                          width: '100%',
-                          opacity: cardFadeOpacity,
-                        },
-                      ]}>
-                      <View style={styles.cardModalImageClip}>
-                        {selectedCards[cardIndex]?.image_uri ? (
-                          <Image
-                            source={{
-                              uri: selectedCards[cardIndex]!.image_uri as string,
-                            }}
-                            style={styles.cardModalImage}
-                            resizeMode="cover"
-                          />
-                        ) : null}
-                      </View>
-                    </Animated.View>
+              <View style={styles.cardGrid}>
+                {selectedCards.map((card) => (
+                  <View key={card.name} style={styles.cardGridItem}>
+                    <Pressable
+                      style={styles.cardGridDeselect}
+                      onPress={() => handleDeselectCard(card.name)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${card.name}`}>
+                      <Text style={styles.cardGridDeselectText}>✕</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.cardGridImagePress}
+                      onPress={() => setActiveStep3Card(card)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open card image for ${card.name}`}>
+                      {card.image_uri ? (
+                        <Image
+                          source={{ uri: card.image_uri }}
+                          style={styles.cardGridImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.cardGridImagePlaceholder} />
+                      )}
+                    </Pressable>
                   </View>
-
-                  {selectedCards.length > 1 && cardIndex > 0 ? (
-                    <TouchableOpacity
-                      onPress={() => setCardIndex((i) => Math.max(0, i - 1))}
-                      style={[
-                        styles.carouselArrow,
-                        { left: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
-                      ]}>
-                      <Text style={styles.carouselArrowLabel}>‹</Text>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  {selectedCards.length > 1 && cardIndex < selectedCards.length - 1 ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setCardIndex((i) =>
-                          Math.min(selectedCards.length - 1, i + 1)
-                        )
-                      }
-                      style={[
-                        styles.carouselArrow,
-                        { right: -18, opacity: Platform.OS === 'web' ? 1 : 0.5 },
-                      ]}>
-                      <Text style={styles.carouselArrowLabel}>›</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                {selectedCards.length > 1 ? (
-                  <View style={styles.carouselDotsRow}>
-                    {selectedCards.map((_, index) => (
-                      <View
-                        key={index}
-                        style={[
-                          styles.carouselDot,
-                          index === cardIndex ? styles.carouselDotActive : null,
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ) : null}
+                ))}
               </View>
             ) : null}
           </View>
@@ -1292,7 +1197,6 @@ export default function Index() {
                 <TouchableOpacity
                   onPress={() => {
                     setSelectedCards([]);
-                    setCardIndex(0);
                     goToStep1();
                   }}
                   style={styles.primaryButton}>
@@ -2053,37 +1957,52 @@ const styles = StyleSheet.create({
     fontFamily: BODY_FONT,
     textAlign: 'center',
   },
-  carouselArrow: {
-    position: 'absolute',
-    top: '50%',
-    width: 36,
-    height: 36,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    transform: [{ translateY: -18 }],
-    zIndex: 2,
-  },
-  carouselArrowLabel: {
-    color: COLOURS.brandSoft,
-    fontSize: 16,
-  },
-  carouselDotsRow: {
+  cardGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  cardGridItem: {
+    position: 'relative',
+    height: 255,
+    aspectRatio: 63 / 88,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  cardGridImagePress: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardGridImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+  },
+  cardGridImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLOURS.surface,
+  },
+  cardGridDeselect: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 99,
+    width: 20,
+    height: 20,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
   },
-  carouselDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    margin: 3,
-    backgroundColor: COLOURS.chipBorder,
-  },
-  carouselDotActive: {
-    backgroundColor: COLOURS.brandSoft,
+  cardGridDeselectText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 14,
   },
   pressed: {
     opacity: 0.85,
