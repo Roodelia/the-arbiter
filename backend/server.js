@@ -955,6 +955,117 @@ app.get("/share/:id", async (req, res) => {
   }
 });
 
+app.get("/admin/golden-cases", async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("golden_test_cases")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return res.json({ cases: Array.isArray(data) ? data : [] });
+  } catch (err) {
+    console.error("Error in GET /admin/golden-cases:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
+app.post("/admin/golden-cases", async (req, res) => {
+  const {
+    cards,
+    situation,
+    category,
+    interaction_type,
+    difficulty,
+    expected_verdict,
+    required_rules,
+    notes,
+  } = req.body || {};
+
+  if (!Array.isArray(cards) || cards.length === 0) {
+    return res
+      .status(400)
+      .json({ error: "cards must be a non-empty string array" });
+  }
+  if (!cards.every((c) => typeof c === "string")) {
+    return res.status(400).json({ error: "cards must contain only strings" });
+  }
+  if (typeof interaction_type !== "string" || !interaction_type.trim()) {
+    return res
+      .status(400)
+      .json({ error: "interaction_type must be a non-empty string" });
+  }
+  if (typeof difficulty !== "string" || !difficulty.trim()) {
+    return res.status(400).json({ error: "difficulty must be a non-empty string" });
+  }
+  if (typeof expected_verdict !== "string" || !expected_verdict.trim()) {
+    return res
+      .status(400)
+      .json({ error: "expected_verdict must be a non-empty string" });
+  }
+  if (
+    situation !== undefined &&
+    situation !== null &&
+    typeof situation !== "string"
+  ) {
+    return res.status(400).json({ error: "situation must be a string" });
+  }
+  if (
+    category !== undefined &&
+    category !== null &&
+    typeof category !== "string"
+  ) {
+    return res.status(400).json({ error: "category must be a string" });
+  }
+  if (required_rules !== undefined && required_rules !== null) {
+    if (!Array.isArray(required_rules)) {
+      return res.status(400).json({ error: "required_rules must be an array" });
+    }
+    if (!required_rules.every((r) => typeof r === "string")) {
+      return res
+        .status(400)
+        .json({ error: "required_rules must contain only strings" });
+    }
+  }
+  if (notes !== undefined && notes !== null && typeof notes !== "string") {
+    return res.status(400).json({ error: "notes must be a string" });
+  }
+
+  const row = {
+    cards,
+    interaction_type: interaction_type.trim(),
+    difficulty: difficulty.trim(),
+    expected_verdict: expected_verdict.trim(),
+    ...(typeof situation === "string" && situation.length > 0
+      ? { situation }
+      : {}),
+    ...(typeof category === "string" && category.length > 0
+      ? { category }
+      : {}),
+    ...(Array.isArray(required_rules) && required_rules.length > 0
+      ? { required_rules }
+      : {}),
+    ...(typeof notes === "string" && notes.length > 0 ? { notes } : {}),
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from("golden_test_cases")
+      .insert(row)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    if (!data || data.id === undefined || data.id === null) {
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+    }
+    return res.json({ success: true, id: data.id });
+  } catch (err) {
+    console.error("Error in POST /admin/golden-cases:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("ManaJudge backend is running.");
 });
