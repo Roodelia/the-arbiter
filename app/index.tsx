@@ -81,6 +81,7 @@ async function copyShareUrlToClipboard(url: string): Promise<void> {
 async function presentRulingShare(
   url: string,
   cardNames: string[],
+  verdictText: string,
 ): Promise<'clipboard' | undefined> {
   const text = buildSharePlainBody(url, cardNames);
 
@@ -111,11 +112,13 @@ async function presentRulingShare(
     return 'clipboard';
   }
 
-  await Share.share({
-    title: SHARE_RULING_TITLE,
-    message: text,
-    url,
-  });
+  Share.share(
+    {
+      message: verdictText,
+      url,
+    },
+    { dialogTitle: 'Share this ruling' },
+  );
   return undefined;
 }
 
@@ -679,6 +682,7 @@ export default function Index() {
       const usedClipboard = await presentRulingShare(
         url,
         selectedCards.map((c) => c.name),
+        rulingResult.ruling,
       );
       if (usedClipboard === 'clipboard') {
         setShareCopied(true);
