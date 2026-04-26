@@ -857,11 +857,22 @@ export default function Index() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
         directionalLockEnabled={true}>
-        <Image
-          source={require('../assets/images/manajudge_title.png')}
-          style={{ width: '100%', height: 60, alignSelf: 'center', marginVertical: 10 }}
-          resizeMode="contain"
-        />
+        <Pressable
+          onPress={() => {
+            if (step !== 3) return;
+            setSelectedCards([]);
+            goToStep1();
+          }}
+          disabled={step !== 3}
+          accessibilityRole={step === 3 ? 'button' : undefined}
+          accessibilityLabel={step === 3 ? 'Return to Step 1' : undefined}
+          style={({ pressed }) => [pressed && step === 3 && styles.pressed]}>
+          <Image
+            source={require('../assets/images/manajudge_title.png')}
+            style={{ width: '100%', height: 60, alignSelf: 'center', marginVertical: 10 }}
+            resizeMode="contain"
+          />
+        </Pressable>
 
       {step === 1 ? (
         <>
@@ -1090,9 +1101,6 @@ export default function Index() {
             {categoriesError ? (
               <Text style={styles.errorText}>{categoriesError}</Text>
             ) : null}
-          </View>
-
-          <View style={styles.section}>
             <TextInput
               value={situation}
               onChangeText={setSituation}
@@ -1154,27 +1162,31 @@ export default function Index() {
                     </Pressable>
                   ))}
                 </View>
-                {selectedCategory.length > 0 ? (
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={[styles.sectionLabel, { marginTop: 10 }]}>
-                      Interaction / Scenario
-                    </Text>
-                    <View style={styles.chipsRow}>
-                      {selectedCategory.map((cat) => (
-                        <View key={cat} style={[styles.categoryChip, styles.categoryChipSelected]}>
-                          <Text
-                            style={[
-                              styles.categoryChipText,
-                              styles.categoryChipTextSelected,
-                            ]}>
-                            {cat}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
               </View>
+
+              {situation.trim() || selectedCategory.length > 0 ? (
+                <View style={styles.section}>
+                  <View style={styles.situationBlock}>
+                    <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION / INTERACTION</Text>
+                    {situation.trim() ? (
+                      <Text style={styles.situationText}>
+                        {situation.trim()}
+                      </Text>
+                    ) : null}
+                    {selectedCategory.length > 0 ? (
+                      <View style={styles.chipsRow}>
+                        {selectedCategory.map((cat) => (
+                          <View key={cat} style={styles.categoryChip}>
+                            <Text style={styles.categoryChipText} numberOfLines={2}>
+                              {cat}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
 
               <View
                 style={[styles.section, styles.step3RulingSection]}
@@ -1600,6 +1612,7 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 100,
     padding: 6,
+    marginTop: 10,
   },
   flagModalOverlay: {
     flex: 1,
@@ -1787,6 +1800,16 @@ const styles = StyleSheet.create({
   categoryChipTextSelected: {
     color: COLOURS.text,
     fontWeight: '700',
+  },
+  situationBlock: {
+    marginTop: 0,
+  },
+  situationText: {
+    color: COLOURS.textSecondary,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: BODY_FONT,
+    marginBottom: 8,
   },
   primaryButton: {
     ...primaryActionButton,

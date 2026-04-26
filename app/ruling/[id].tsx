@@ -263,7 +263,7 @@ export default function SharedRulingScreen() {
 
         {!loading && ruling && !notFound && !errorMessage ? (
           <>
-            <View style={[styles.section, styles.contextSection]}>
+            <View style={styles.section}>
               <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Cards</Text>
 
               {cardNames.length > 0 ? (
@@ -286,10 +286,12 @@ export default function SharedRulingScreen() {
                   ))}
                 </View>
               ) : null}
+            </View>
 
-              {ruling.situation?.trim() || categoryLabels.length > 0 ? (
+            {ruling.situation?.trim() || categoryLabels.length > 0 ? (
+              <View style={styles.section}>
                 <View style={styles.situationBlock}>
-                  <Text style={[styles.sectionLabel, { marginTop: 6 }]}>SITUATION / INTERACTION</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 0 }]}>SITUATION / INTERACTION</Text>
                   {ruling.situation?.trim() ? (
                     <Text style={styles.situationText}>
                       {ruling.situation.trim()}
@@ -307,8 +309,8 @@ export default function SharedRulingScreen() {
                     </View>
                   ) : null}
                 </View>
-              ) : null}
-            </View>
+              </View>
+            ) : null}
 
             <View style={[styles.section, styles.step3RulingSection]}>
               <View style={styles.rulingFocusStrip} />
@@ -637,13 +639,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   situationBlock: {
-    marginTop: 14,
+    marginTop: 10,
   },
   situationText: {
     color: COLOURS.textSecondary,
     fontSize: 14,
     lineHeight: 18,
     fontFamily: BODY_FONT,
+    marginBottom: 8,
   },
   rulingText: {
     color: COLOURS.textLight,
