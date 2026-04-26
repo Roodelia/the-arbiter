@@ -79,6 +79,20 @@ const shareLimiter = rateLimit({
 const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge.
 Your role is to provide accurate, cited rulings for game situations.
 
+CRITICAL — CANONICAL CARD DATA:
+The user message includes a CARD DATA section containing
+authoritative card information pulled directly from Scryfall.
+You MUST treat this data as the single source of truth for:
+- Mana costs (including exact generic and colored mana symbols)
+- Power and toughness
+- Oracle text
+- Type line and supertypes/subtypes
+
+NEVER restate a card's mana cost, P/T, or oracle text from memory.
+ALWAYS reference the CARD DATA block when citing these values.
+If a value you need is not present in CARD DATA, state explicitly
+that the information is unavailable rather than guessing.
+
 Before writing your response, reason through these passes 
 internally without outputting them:
 
@@ -127,7 +141,7 @@ No preamble before the ruling. Do not include any pass labels or internal
 calculations in the output. The player should see only the verdict
 and a clean explanation.
 
-Critical rules:
+Key Principles:
 - Never assume an interaction does NOT exist without checking
 - Always consider recursive interactions (A affects B which affects A)
 - Show explicit calculations for any numerical results
@@ -242,10 +256,23 @@ async function fetchCardOracle(cardName) {
 
     return {
       name: data.name,
+      mana_cost: data.mana_cost || "",
       oracle_text: data.oracle_text || "",
       type_line: data.type_line || "",
       power: data.power || null,
       toughness: data.toughness || null,
+      loyalty: data.loyalty || null,
+      card_faces: Array.isArray(data.card_faces)
+        ? data.card_faces.map((face) => ({
+            name: face?.name || "",
+            mana_cost: face?.mana_cost || "",
+            type_line: face?.type_line || "",
+            oracle_text: face?.oracle_text || "",
+            power: face?.power || null,
+            toughness: face?.toughness || null,
+            loyalty: face?.loyalty || null,
+          }))
+        : [],
       image_uri:
         data.image_uris?.normal ||
         data.image_uris?.large ||
@@ -259,7 +286,11 @@ async function fetchCardOracle(cardName) {
   }
 }
 
-function buildOracleBlock(oracleData, { includeStats = false } = {}) {
+/**
+ * Builds a human-readable card summary block for non-canonical contexts only:
+ * category generation prompt input and /ruling oracle_referenced fallback text.
+ */
+function buildCardSummaryBlock(oracleData, { includeStats = false } = {}) {
   return oracleData
     .map((c) => {
       const stats =
@@ -271,6 +302,70 @@ function buildOracleBlock(oracleData, { includeStats = false } = {}) {
           ? "\nOfficial Rulings:\n" + c.rulings.map((r) => `• ${r}`).join("\n")
           : "";
       return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
+    })
+    .join("\n\n");
+}
+
+function buildCardDataBlock(oracleData) {
+  const cardsText = oracleData
+    .map((c) => {
+      const lines = [];
+      lines.push(`Card: ${c.name}`);
+
+      const hasFaces = Array.isArray(c.card_faces) && c.card_faces.length > 0;
+      if (hasFaces) {
+        c.card_faces.forEach((face, idx) => {
+          const label =
+            idx === 0
+              ? "Front Face"
+              : idx === 1
+                ? "Back Face"
+                : `Face ${idx + 1}`;
+          lines.push(`${label}: ${face.name || ""}`.trim());
+          if (face.mana_cost) lines.push(`Mana Cost: ${face.mana_cost}`);
+          if (face.type_line) lines.push(`Type: ${face.type_line}`);
+          if (face.oracle_text) lines.push(`Oracle Text: ${face.oracle_text}`);
+          if (face.power != null && face.toughness != null) {
+            lines.push(`Power/Toughness: ${face.power}/${face.toughness}`);
+          }
+          if (face.loyalty != null) {
+            lines.push(`Loyalty: ${face.loyalty}`);
+          }
+        });
+      } else {
+        if (c.mana_cost) lines.push(`Mana Cost: ${c.mana_cost}`);
+        if (c.type_line) lines.push(`Type: ${c.type_line}`);
+        if (c.oracle_text) lines.push(`Oracle Text: ${c.oracle_text}`);
+        if (c.power != null && c.toughness != null) {
+          lines.push(`Power/Toughness: ${c.power}/${c.toughness}`);
+        }
+        if (c.loyalty != null) {
+          lines.push(`Loyalty: ${c.loyalty}`);
+        }
+      }
+
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+  return `=== CARD DATA (authoritative — use these values exactly) ===
+
+${cardsText}
+
+=== END CARD DATA ===`;
+}
+
+function buildOfficialRulingsBlock(oracleData) {
+  return oracleData
+    .map((c) => {
+      const lines = [`Card: ${c.name}`];
+      if (Array.isArray(c.rulings) && c.rulings.length > 0) {
+        lines.push("Official Rulings:");
+        lines.push(...c.rulings.map((r) => `• ${r}`));
+      } else {
+        lines.push("Official Rulings: (none)");
+      }
+      return lines.join("\n");
     })
     .join("\n\n");
 }
@@ -353,7 +448,7 @@ Rules for generating categories:
 
 Respond ONLY with a valid JSON array of 3-5 short category label strings with max of 5 words each. No preamble, no markdown, just the raw JSON array.`;
 
-    const oracleBlock = buildOracleBlock(oracleData, { includeStats: false });
+    const oracleBlock = buildCardSummaryBlock(oracleData, { includeStats: false });
 
     const userContent = `Here are the cards and their oracle texts:
 
@@ -420,8 +515,13 @@ app.post("/ruling", async (req, res) => {
 
   try {
     const oracleData = await fetchAllCardOracle(cards);
+    console.log("[/ruling] Scryfall oracleData:", JSON.stringify(oracleData, null, 2));
 
-    const oracleBlock = buildOracleBlock(oracleData, { includeStats: true });
+    const cardDataBlock = buildCardDataBlock(oracleData);
+    console.log("[/ruling] CARD DATA block length:", cardDataBlock.length);
+
+    const oracleBlock = buildCardSummaryBlock(oracleData, { includeStats: true });
+    const officialRulingsBlock = buildOfficialRulingsBlock(oracleData);
 
     const cardOracleTexts = oracleData
       .map((c) => (typeof c.oracle_text === "string" ? c.oracle_text.trim() : ""))
@@ -578,11 +678,13 @@ app.post("/ruling", async (req, res) => {
 
     const contextSection = contextLines.join("\n");
 
-    const userPrompt = `RELEVANT COMPREHENSIVE RULES (retrieved via RAG):
+    const userPrompt = `${cardDataBlock}
+
+RELEVANT COMPREHENSIVE RULES (retrieved via RAG):
 ${crChunks}
 
-CARD ORACLE TEXT (from Scryfall):
-${oracleBlock}
+OFFICIAL CARD RULINGS (from Scryfall):
+${officialRulingsBlock}
 
 ${contextSection}`;
 
