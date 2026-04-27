@@ -1,6 +1,6 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE } from '@/constants/theme';
 import { type Href, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,15 +14,32 @@ import {
 } from 'react-native';
 
 const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const MAX_CARDS = 4;
+
+type ScryfallAutocompleteResponse = {
+  data: string[];
+};
 
 /** List route. Do not use `/admin/golden_cases/index` — it is captured by `[id]` as id "index". */
 const GOLDEN_CASES_LIST_HREF = '/admin/golden_cases' as unknown as Href;
 
-function splitCommaList(raw: string): string[] {
+function parseCommaList(raw: string): string[] {
   return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function uniqCaseInsensitive(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const key = item.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item.trim());
+  }
+  return out;
 }
 
 /** Same layout base as app/ruling/[id].tsx primary CTAs. */
@@ -39,7 +56,10 @@ const primaryActionButton: ViewStyle = {
 
 export default function GoldenCaseNewScreen() {
   const router = useRouter();
-  const [cards, setCards] = useState('');
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [maxCardsError, setMaxCardsError] = useState<string | null>(null);
   const [situation, setSituation] = useState('');
   const [category, setCategory] = useState('');
   const [interactionType, setInteractionType] = useState('');
@@ -49,6 +69,71 @@ export default function GoldenCaseNewScreen() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autocompleteAbortRef = useRef<AbortController | null>(null);
+
+  const fetchAutocomplete = useCallback(async (q: string) => {
+    autocompleteAbortRef.current?.abort();
+    const controller = new AbortController();
+    autocompleteAbortRef.current = controller;
+
+    try {
+      const res = await fetch(
+        `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`,
+        { signal: controller.signal }
+      );
+      if (!res.ok) throw new Error('Scryfall autocomplete failed');
+      const json = (await res.json()) as ScryfallAutocompleteResponse;
+      const deduped = uniqCaseInsensitive(json.data ?? []);
+      setSuggestions(deduped.slice(0, 12));
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') return;
+      setSuggestions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    setError(null);
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      autocompleteAbortRef.current?.abort();
+      return;
+    }
+
+    const trimmed = query.trim();
+    const handle = setTimeout(() => {
+      void fetchAutocomplete(trimmed);
+    }, 250);
+
+    return () => clearTimeout(handle);
+  }, [query, fetchAutocomplete]);
+
+  const addCard = useCallback((cardName: string) => {
+    setError(null);
+    const normalized = cardName.trim().toLowerCase();
+    setSelectedCards((prev) => {
+      const exists = prev.some((name) => name.trim().toLowerCase() === normalized);
+      if (exists) {
+        setMaxCardsError(null);
+        return prev;
+      }
+      if (prev.length >= MAX_CARDS) {
+        setMaxCardsError('4 cards maximum — remove one to add another');
+        return prev;
+      }
+      setMaxCardsError(null);
+      return [...prev, cardName];
+    });
+    setQuery('');
+    setSuggestions([]);
+  }, []);
+
+  const removeCard = useCallback((cardName: string) => {
+    const normalized = cardName.trim().toLowerCase();
+    setSelectedCards((prev) =>
+      prev.filter((name) => name.trim().toLowerCase() !== normalized)
+    );
+    setMaxCardsError(null);
+  }, []);
 
   const onSave = async () => {
     setError(null);
@@ -56,8 +141,7 @@ export default function GoldenCaseNewScreen() {
       setError(GENERIC_ERROR_MESSAGE);
       return;
     }
-    const cardsArr = splitCommaList(cards);
-    if (cardsArr.length === 0) {
+    if (selectedCards.length === 0) {
       setError('Add at least one card name.');
       return;
     }
@@ -75,14 +159,14 @@ export default function GoldenCaseNewScreen() {
     }
 
     const body: Record<string, unknown> = {
-      cards: cardsArr,
+      cards: selectedCards,
       interaction_type: interactionType.trim(),
       difficulty: difficulty.trim(),
       expected_verdict: expectedVerdict.trim(),
     };
     if (situation.trim()) body.situation = situation.trim();
     if (category.trim()) body.category = category.trim();
-    const rulesArr = splitCommaList(requiredRules);
+    const rulesArr = parseCommaList(requiredRules);
     if (rulesArr.length > 0) body.required_rules = rulesArr;
     if (notes.trim()) body.notes = notes.trim();
 
@@ -155,16 +239,66 @@ export default function GoldenCaseNewScreen() {
         </Text>
         <View style={styles.refineDivider} />
 
-        <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Cards (comma-separated)</Text>
-        <TextInput
-          style={styles.input}
-          value={cards}
-          onChangeText={setCards}
-          placeholder="Lightning Bolt, Counterspell"
-          placeholderTextColor={COLOURS.placeholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Cards</Text>
+        {selectedCards.length < MAX_CARDS ? (
+          <View style={styles.searchRow}>
+            <View style={styles.searchComposer}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search for a card..."
+                placeholderTextColor={COLOURS.textMuted}
+                style={[styles.input, styles.searchInput, styles.searchComposerInput]}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {suggestions.length > 0 ? (
+                <View style={styles.suggestions}>
+                  {suggestions.map((s, index) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => addCard(s)}
+                      style={({ pressed }) => [
+                        styles.suggestionRow,
+                        index > 0 && styles.suggestionRowDivider,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.suggestionText}>{s}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.helperHint}>4 cards maximum — remove one to add another</Text>
+        )}
+
+        {maxCardsError && selectedCards.length < MAX_CARDS ? (
+          <Text style={styles.helperHint}>{maxCardsError}</Text>
+        ) : null}
+
+        {selectedCards.length === 0 ? (
+          <Text style={styles.helperHint}>Add at least 1 card.</Text>
+        ) : null}
+
+        {selectedCards.length > 0 ? (
+          <View style={styles.chipsRow}>
+            {selectedCards.map((card) => (
+              <Pressable
+                key={card}
+                onPress={() => removeCard(card)}
+                style={({ pressed }) => [styles.cardChip, pressed && styles.pressed]}
+              >
+                <Text style={styles.cardChipText} numberOfLines={1}>
+                  {card} {'  '}
+                  <Text style={styles.cardChipRemoveMark}>×</Text>
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
         <Text style={styles.sectionLabel}>Situation (optional)</Text>
         <TextInput
@@ -324,6 +458,27 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 6,
   },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  searchComposer: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    backgroundColor: COLOURS.surface,
+    overflow: 'visible',
+    position: 'relative',
+    zIndex: 100,
+  },
+  searchComposerInput: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
   input: {
     flex: 0,
     minHeight: 44,
@@ -337,6 +492,70 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: BODY_FONT,
     marginBottom: 4,
+  },
+  searchInput: {
+    fontSize: 16,
+  },
+  suggestions: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 200,
+    elevation: 10,
+    backgroundColor: COLOURS.surface,
+    borderRadius: 8,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+  },
+  suggestionRow: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  suggestionRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLOURS.border,
+  },
+  suggestionText: {
+    color: COLOURS.text,
+    fontSize: 14,
+    fontFamily: BODY_FONT,
+  },
+  chipsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  cardChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLOURS.chipBorder,
+    backgroundColor: COLOURS.surface,
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  cardChipText: {
+    color: COLOURS.textSecondary,
+    fontWeight: '500',
+    fontFamily: BODY_FONT,
+    fontSize: 14,
+  },
+  cardChipRemoveMark: {
+    color: COLOURS.error,
+    fontWeight: 'bold',
+    fontFamily: BODY_FONT,
+  },
+  helperHint: {
+    color: COLOURS.textMuted,
+    fontFamily: 'serif',
+    textAlign: 'center',
+    fontSize: 14,
+    marginTop: 10,
   },
   multilineInput: {
     minHeight: 100,

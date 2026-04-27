@@ -129,8 +129,8 @@ Once you have completed all internal passes, output ONLY this:
 RULING: [Clear one or two sentence ruling with final numbers]
 The RULING line must be consistent with and supported by the EXPLANATION.
 Do not include reasoning in the RULING line that contradicts the EXPLANATION.
-The RULING should state the final answer only — no mechanistic reasoning.
-EXPLANATION: [Bullet points for a player at the table. One • per line, 
+The RULING should state the final answer only.
+EXPLANATION: [Bullet points. One • per line, 
 3-5 bullets maximum. Each bullet is one key point of reasoning. 
 No pass labels or internal working.]
 RULES CITED: [comma-separated rule numbers only, e.g. 702.15a, 601.2c — no rule text]
@@ -151,10 +151,10 @@ Key Principles:
 CRITICAL INTERACTION RULES:
 1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted, the controller does NOT change — new targets must be legal from the original controller's perspective.
 2. CAST vs ETB TIMING: "When you cast" triggers resolve BEFORE the spell resolves. "When [this] enters the battlefield" triggers happen AFTER. Never treat them as simultaneous.
-3. REPLACEMENT vs TRIGGERED: Replacement effects ("instead", "as", "with") modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities ("when", "whenever", "at") happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
+3. REPLACEMENT vs TRIGGERED: Replacement effects modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
 4. LAYERS (613): Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7a-d) P/T. Earlier layers always apply first regardless of timestamp.
 5. STATE-BASED ACTIONS: Checked when a player would receive priority. Happen simultaneously, don't use the stack. Includes: 0 toughness, lethal damage, 0 life, legend rule, counter cancellation.
-6. DOUBLERS: Token doublers are replacement effects and multiply with each other. Trigger doublers create additional stack triggers. These are different mechanics.`;
+6. MULTIPLICATIVE vs ADDITIVE replacement effects: "twice that many" (quantity replacements):    multiplicative where N doublers = 2^N × original. "triggers an additional time" (trigger replacements): additive where N instances = N + 1 total triggers, never 2^N.`;
 
 const GENERIC_SERVER_ERROR_MESSAGE =
   "Something went wrong. Please try again.";
