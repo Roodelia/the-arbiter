@@ -46,7 +46,7 @@ CR_LOCAL_FILE     = "comprehensive_rules.txt"  # cached local copy
 # The official Wizards CR plain text URL
 # Note: Wizards updates this file with each set release.
 # If this URL breaks, check https://magic.wizards.com/en/rules for the latest link.
-CR_URL = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+CR_URL = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260417.txt"
 
 def _extract_cr_version(url: str) -> str:
     """Extract YYYYMMDD from CR URL filename and return YYYY-MM-DD."""

@@ -40,7 +40,7 @@ async function sendTelegramAlert({ cards, situation, ruling }) {
   ).catch(err => console.error('Telegram alert failed:', err));
 }
 
-const EXPANSION_BLOCKLIST = new Set(["704.5", "111.10", "205.3","703.4","607.2","800.4","113.6","112.1","104.3","807.4"]);
+const EXPANSION_BLOCKLIST = new Set(["104.3", "111.10", "112.1", "113.6", "607.2", "703.4", "704.5", "800.4", "807.4"]);
 
 function cosineSimilarity(a, b) {
   let dot = 0, magA = 0, magB = 0;
