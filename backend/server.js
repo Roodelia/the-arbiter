@@ -40,7 +40,30 @@ async function sendTelegramAlert({ cards, situation, ruling }) {
   ).catch(err => console.error('Telegram alert failed:', err));
 }
 
-const EXPANSION_BLOCKLIST = new Set(["104.3", "111.10", "112.1", "113.6", "607.2", "703.4", "704.5", "800.4", "807.4"]);
+const EXPANSION_BLOCKLIST = new Set(["104.3", "111.10", "112.1", "113.6", "607.2", "702", "703.4", "704.5", "800.4", "807.4"]);
+
+const RETRIEVAL_ANCHORS = [
+  {
+    label: "ability_loss",
+    pattern: /\blos(e|es) (all (other )?)?abilities|no abilities|without abilities/i,
+    rules: ["613.1","613.1f", "613.6"],
+  },
+  { 
+    label: "type_change",
+    pattern: /becomes? a .{1,40} creature|is a .{1,40} creature in addition|are .{1,40} creatures? in addition/i,
+    rules: ["613.1","613.1d"],
+  },
+  {
+    label: "additional_trigger",
+    pattern: /triggers an additional time|triggers one additional time|that ability triggers/i,
+    rules: ["603.2d"],
+  },
+  {
+    label: "quantity_replacement",
+    pattern: /create twice that many|double that number|twice as many|puts twice that many/i,
+    rules: ["614.1", "614.6", "111.10"],
+  },
+];
 
 function cosineSimilarity(a, b) {
   let dot = 0, magA = 0, magB = 0;
@@ -50,6 +73,19 @@ function cosineSimilarity(a, b) {
     magB += b[i] * b[i];
   }
   return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+}
+
+function applyRetrievalAnchors(situation, oracleTexts) {
+  const haystack = [situation || "", ...(oracleTexts || [])].join("\n").toLowerCase();
+  const matches = [];
+  for (const anchor of RETRIEVAL_ANCHORS) {
+    if (anchor.pattern.test(haystack)) {
+      for (const ruleNumber of anchor.rules) {
+        matches.push({ rule_number: ruleNumber, label: anchor.label });
+      }
+    }
+  }
+  return matches;
 }
 
 const limiterOptions = {
@@ -111,7 +147,7 @@ Work through every combination, not just the obvious ones.
 
 INTERNAL PASS 3 — LAYER ORDER:
 Apply effects in correct game order:
-1. Static abilities and continuous effects first
+1. Static abilities and continuous effects first. If rule 613.1 is stated, apply the effects in the order of the layers ((1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7) P/T)
 2. Replacement effects
 3. Triggered abilities in APNAP order
 4. For each triggered ability, check if any doubling effects apply
@@ -151,8 +187,8 @@ Key Principles:
 CRITICAL INTERACTION RULES:
 1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted, the controller does NOT change — new targets must be legal from the original controller's perspective.
 2. CAST vs ETB TIMING: "When you cast" triggers resolve BEFORE the spell resolves. "When [this] enters the battlefield" triggers happen AFTER. Never treat them as simultaneous.
-3. REPLACEMENT vs TRIGGERED: Replacement effects modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
-4. LAYERS (613): Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7a-d) P/T. Earlier layers always apply first regardless of timestamp.
+3. REPLACEMENT vs TRIGGERED: Replacement effects ("If" / "Instead" / "With") modify events as they happen, don't use the stack, and apply only once per event. Triggered abilities ("at", "whenever", "when") happen after the event and use the stack. When multiple replacement effects apply, the affected controller chooses the order.
+4. LAYERS: Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7) P/T. Earlier layers always apply first regardless of timestamp.
 5. STATE-BASED ACTIONS: Checked when a player would receive priority. Happen simultaneously, don't use the stack. Includes: 0 toughness, lethal damage, 0 life, legend rule, counter cancellation.
 6. MULTIPLICATIVE vs ADDITIVE replacement effects: "twice that many" (quantity replacements):    multiplicative where N doublers = 2^N × original. "triggers an additional time" (trigger replacements): additive where N instances = N + 1 total triggers, never 2^N.`;
 
@@ -575,7 +611,50 @@ app.post("/ruling", async (req, res) => {
       }
     }
 
-    const topHits = baseMatches.slice(0, 3);
+    const anchorMatches = applyRetrievalAnchors(situation, cardOracleTexts);
+    const anchorRuleNumbers = Array.from(
+      new Set(anchorMatches.map((a) => a.rule_number).filter(Boolean)),
+    );
+
+    const anchorLabelByRule = new Map();
+    for (const match of anchorMatches) {
+      if (!match?.rule_number || anchorLabelByRule.has(match.rule_number)) continue;
+      anchorLabelByRule.set(match.rule_number, match.label);
+    }
+
+    const anchoredRulesToFetch = anchorRuleNumbers.filter(
+      (ruleNumber) => !mergedByRuleNumber.has(ruleNumber),
+    );
+    const addedAnchoredRuleNumbers = [];
+
+    if (anchoredRulesToFetch.length > 0) {
+      const { data: anchoredRows, error: anchoredRulesError } = await supabase
+        .from("comprehensive_rules")
+        .select("rule_number, rule_text, parent_rule_number")
+        .in("rule_number", anchoredRulesToFetch);
+
+      if (anchoredRulesError) {
+        console.error("Supabase anchored rule lookup error:", anchoredRulesError);
+      } else {
+        for (const row of Array.isArray(anchoredRows) ? anchoredRows : []) {
+          if (!row?.rule_number || mergedByRuleNumber.has(row.rule_number)) continue;
+          mergedByRuleNumber.set(row.rule_number, {
+            ...row,
+            similarity: null,
+            expanded: false,
+            anchored: true,
+            anchor_label: anchorLabelByRule.get(row.rule_number) || null,
+          });
+          addedAnchoredRuleNumbers.push(row.rule_number);
+        }
+      }
+    }
+    console.log("[/ruling] Retrieval anchors fired:", anchorMatches.map((a) => `${a.label}→${a.rule_number}`));
+    if (anchorMatches.length > 0) {
+      console.log("[/ruling] Anchored rules added (not already in baseMatches):", addedAnchoredRuleNumbers);
+    }
+
+    const topHits = baseMatches.slice(0, 2);
     for (const hit of topHits) {
       const hitRuleNumber = hit?.rule_number || hit?.rule;
       if (!hitRuleNumber) continue;
@@ -635,18 +714,66 @@ app.post("/ruling", async (req, res) => {
     }
 
     const finalRules = Array.from(mergedByRuleNumber.values()).sort((a, b) => {
-      const aRule = String(a?.rule_number || a?.rule || "");
-      const bRule = String(b?.rule_number || b?.rule || "");
-      return aRule.localeCompare(bRule);
+      // Anchored first
+      if (a.anchored && !b.anchored) return -1;
+      if (!a.anchored && b.anchored) return 1;
+      // Then semantic by similarity
+      if (!a.expanded && !b.expanded) {
+        return (b.similarity ?? 0) - (a.similarity ?? 0);
+      }
+      // Expanded last
+      if (a.expanded && !b.expanded) return 1;
+      if (!a.expanded && b.expanded) return -1;
+      // Within same category, alphabetical
+      return String(a.rule_number).localeCompare(String(b.rule_number));
     });
 
-    const ragMatches = finalRules.map((rule) => ({
+    const RAG_CONTEXT_CAP = 12;
+    const finalRulesCapped = (() => {
+      if (finalRules.length <= RAG_CONTEXT_CAP) return finalRules;
+
+      // Priority: anchored rules (always kept) -> top similarity (kept) -> expanded (evicted first)
+      const anchored = finalRules.filter((r) => r.anchored);
+      const semantic = finalRules
+        .filter((r) => !r.anchored && !r.expanded)
+        .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
+      const expanded = finalRules.filter((r) => r.expanded && !r.anchored);
+
+      if (anchored.length >= RAG_CONTEXT_CAP) {
+        console.warn(
+          `[/ruling] Anchored rules exceed cap (${anchored.length} anchors > ${RAG_CONTEXT_CAP}). Keeping all anchors.`,
+        );
+        return anchored.sort((a, b) => {
+          const aRule = String(a?.rule_number || a?.rule || "");
+          const bRule = String(b?.rule_number || b?.rule || "");
+          return aRule.localeCompare(bRule);
+        });
+      }
+
+      const kept = [...anchored, ...semantic];
+      const remaining = RAG_CONTEXT_CAP - kept.length;
+      if (remaining > 0) kept.push(...expanded.slice(0, remaining));
+
+      return kept.sort((a, b) => {
+        const aRule = String(a?.rule_number || a?.rule || "");
+        const bRule = String(b?.rule_number || b?.rule || "");
+        return aRule.localeCompare(bRule);
+      });
+    })();
+
+    console.log(
+      `[/ruling] Final RAG context: ${finalRulesCapped.length} rules (${finalRules.length} before cap). Anchored: ${finalRulesCapped.filter((r) => r.anchored).length}, Expanded: ${finalRulesCapped.filter((r) => r.expanded).length}.`,
+    );
+
+    const ragMatches = finalRulesCapped.map((rule) => ({
       rule_number: rule.rule_number || rule.rule || "",
       similarity: rule.similarity ?? null,
       expanded: rule.expanded ?? false,
+      anchored: rule.anchored ?? false,
+      anchor_label: rule.anchor_label ?? null,
     }));
 
-    const crChunks = finalRules
+    const crChunks = finalRulesCapped
       .map((m, idx) => {
         const ruleNumber = m.rule_number || m.rule || `Rule ${idx + 1}`;
         const text = m.rule_text || m.text || "";
@@ -843,7 +970,6 @@ app.post("/log", async (req, res) => {
     ruling,
     explanation,
     rules_cited,
-    rag_matches,
     flagged,
     flag_reason,
   } = req.body || {};
@@ -866,7 +992,7 @@ app.post("/log", async (req, res) => {
       ...(ruling !== undefined && { ruling }),
       ...(explanation !== undefined && { explanation }),
       ...(rules_cited !== undefined && { rules_cited }),
-      ...(rag_matches !== undefined && { rag_matches }),
+      // rag_matches is server-owned and written exclusively by /ruling.
       ...(flagged !== undefined && { flagged }),
       ...(flag_reason !== undefined && { flag_reason }),
     };
