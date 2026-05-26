@@ -159,6 +159,7 @@ def chunk_rules(cr_text: str) -> list[dict]:
             {
                 "rule_number": current_rule_number,
                 "rule_text": display,
+                "rule_text_for_embedding": rule_text,
                 "parent_rule_number": _get_parent_rule_number(current_rule_number),
             }
         )
@@ -184,6 +185,7 @@ def chunk_rules(cr_text: str) -> list[dict]:
                 {
                     "rule_number": f"{major}.",
                     "rule_text": f"Rule {major}.: {combined}",
+                    "rule_text_for_embedding": combined,
                     "parent_rule_number": None,
                 }
             )
@@ -243,10 +245,12 @@ def embed_chunks(chunks: list[dict], vo: voyageai.Client) -> list[dict]:
         end = min(start + BATCH_SIZE, len(chunks))
         batch = chunks[start:end]
 
-        texts = [c["rule_text"] for c in batch]
+        pythontexts = [
+            c.get("rule_text_for_embedding") or c["rule_text"] for c in batch
+        ]
 
         try:
-            result = vo.embed(texts, model=EMBEDDING_MODEL, input_type="document")
+            result = vo.embed(pythontexts, model=EMBEDDING_MODEL, input_type="document")
             for i, embedding in enumerate(result.embeddings):
                 chunks[start + i]["embedding"] = embedding
 
@@ -291,6 +295,7 @@ def upload_to_supabase(chunks: list[dict], supabase_client) -> None:
             {
                 "rule_number": c["rule_number"],
                 "rule_text": c["rule_text"],
+                "rule_text_for_embedding": c.get("rule_text_for_embedding"),
                 "parent_rule_number": c.get("parent_rule_number"),
                 "embedding": c["embedding"],
                 "cr_version": CR_VERSION,
@@ -384,6 +389,10 @@ def test_retrieval(query: str, vo: voyageai.Client, supabase_client) -> None:
 #   order by embedding <=> query_embedding
 #   limit match_count;
 # $$;
+# 
+# -- Add rule_text_for_embedding column (run once per environment)
+# ALTER TABLE comprehensive_rules
+# ADD COLUMN IF NOT EXISTS rule_text_for_embedding TEXT;
 # ─────────────────────────────────────────────
 
 
