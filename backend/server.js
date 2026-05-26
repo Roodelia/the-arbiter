@@ -9,6 +9,51 @@ const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
 const CR_VERSION = process.env.CR_VERSION || "unknown";
 
+const CATEGORY_ANCHORS = [
+  // 702 Keyword Abilities (complete, CR-sourced)
+  'Deathtouch', 'Defender', 'Double Strike', 'Enchant', 'Equip',
+  'First Strike', 'Flash', 'Flying', 'Haste', 'Hexproof',
+  'Indestructible', 'Intimidate', 'Landwalk', 'Lifelink', 'Protection',
+  'Reach', 'Shroud', 'Trample', 'Vigilance', 'Ward', 'Banding',
+  'Rampage', 'Cumulative Upkeep', 'Flanking', 'Phasing', 'Buyback',
+  'Shadow', 'Cycling', 'Echo', 'Horsemanship', 'Fading', 'Kicker',
+  'Flashback', 'Madness', 'Fear', 'Morph', 'Amplify', 'Provoke',
+  'Storm', 'Affinity', 'Entwine', 'Modular', 'Sunburst', 'Bushido',
+  'Soulshift', 'Splice', 'Offering', 'Ninjutsu', 'Epic', 'Convoke',
+  'Dredge', 'Transmute', 'Bloodthirst', 'Haunt', 'Replicate',
+  'Forecast', 'Graft', 'Recover', 'Ripple', 'Split Second', 'Suspend',
+  'Vanishing', 'Absorb', 'Aura Swap', 'Delve', 'Fortify', 'Frenzy',
+  'Gravestorm', 'Poisonous', 'Transfigure', 'Champion', 'Changeling',
+  'Evoke', 'Hideaway', 'Prowl', 'Reinforce', 'Conspire', 'Persist',
+  'Wither', 'Retrace', 'Devour', 'Exalted', 'Unearth', 'Cascade',
+  'Annihilator', 'Level Up', 'Rebound', 'Umbra Armor', 'Infect',
+  'Battle Cry', 'Living Weapon', 'Undying', 'Miracle', 'Soulbond',
+  'Overload', 'Scavenge', 'Unleash', 'Cipher', 'Evolve', 'Extort',
+  'Fuse', 'Bestow', 'Tribute', 'Dethrone', 'Outlast', 'Prowess',
+  'Dash', 'Exploit', 'Menace', 'Renown', 'Awaken', 'Devoid', 'Ingest',
+  'Myriad', 'Surge', 'Skulk', 'Emerge', 'Escalate', 'Melee', 'Crew',
+  'Fabricate', 'Partner', 'Undaunted', 'Improvise', 'Aftermath',
+  'Embalm', 'Eternalize', 'Afflict', 'Ascend', 'Assist', 'Jump-Start',
+  'Mentor', 'Afterlife', 'Riot', 'Spectacle', 'Escape', 'Companion',
+  'Mutate', 'Encore', 'Boast', 'Foretell', 'Demonstrate',
+  'Daybound', 'Nightbound', 'Disturb', 'Decayed', 'Cleave', 'Training',
+  'Compleated', 'Reconfigure', 'Blitz', 'Casualty', 'Enlist',
+  'Read Ahead', 'Ravenous', 'Squad', 'Prototype', 'Living Metal',
+  'Toxic', 'Backup', 'Bargain', 'Craft', 'Disguise', 'Plot', 'Saddle',
+  'Spree', 'Freerunning', 'Gift', 'Offspring', 'Impending', 'Exhaust',
+  'Harmonize', 'Mobilize', 'Warp', 'Mayhem', 'Sneak', 'Increment', 
+  'Tiered', 'Station', 'Web-Slinging', 'Firebending',
+  'Start Your Engines!', 'Max Speed', 'Job Select', 'Paradigm',
+  // Critical interaction terms
+  'Continuous Effects', 'Replacement Effects', 'Triggered Abilities',
+  'Activated Abilities', 'Static Abilities', 'State-Based Actions',
+  'Copy Effects', 'Layers', 'Priority', 'Tokens',
+  'Counters', 'Cost Reduction', 'Mana Value', 'Doubling',
+  'Combat Damage', 'Blocking Restrictions',
+  'Enters the Battlefield', 'Dies Trigger', 'Sacrifice',
+  'Exile', 'Graveyard', 'Regeneration', 'Phasing', 
+];
+
 async function sendTelegramAlert({ cards, situation, ruling }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -534,16 +579,19 @@ app.post("/categories", async (req, res) => {
   try {
     const oracleData = await fetchAllCardOracle(cards);
 
-    const systemPrompt = `You are an expert Magic: The Gathering judge. Given card oracle texts, identify the most relevant SPECIFIC interaction categories a player would likely need a ruling on when these cards are on the battlefield together or being cast in sequence.
+    const anchorList = CATEGORY_ANCHORS.join(', ');
 
-Rules for generating categories:
-- Each category must be 5 words or fewer. Never use full sentences or long descriptive labels.
-- Focus on card-to-card INTERACTIONS, not individual card mechanics in isolation
-- Think about what causes confusion or disputes at the table with these specific cards
-- If cards share a mechanic, call out the specific interaction (e.g., "Multiple replacement effects on damage")
-- For a single card, focus on the most commonly misunderstood or disputed aspects of that card
+    const categoryPrompt = `You are an expert Magic: The Gathering rules judge. Given the cards and situation, identify 1–4 interaction categories that best describe what rules are at play.
 
-Respond ONLY with a valid JSON array of 3-5 short category label strings with max of 5 words each. No preamble, no markdown, just the raw JSON array.`;
+ANCHOR LIST:
+${anchorList}
+
+INSTRUCTIONS:
+- You MUST pick labels from the anchor list above whenever one fits.
+- Prefer exact anchor phrasing (e.g. "Replacement Effects" not "replacement effect rules").
+- Only use free-form labels if no anchor fits — keep them 5 words or fewer.
+- Return a JSON array of strings, e.g. ["Triggered Abilities", "Layers"]
+- No preamble, no explanation, only the JSON array.`;
 
     const oracleBlock = buildCardSummaryBlock(oracleData, { includeStats: false });
 
@@ -559,7 +607,7 @@ What specific interactions or ruling questions would players most likely need he
       system: [
         {
           type: "text",
-          text: systemPrompt,
+          text: categoryPrompt,
           cache_control: { type: "ephemeral" },
         },
       ],
