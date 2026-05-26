@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Platform,
@@ -211,6 +210,16 @@ function rulingPreviewText(text: string, maxLen: number): string {
   return `${t.slice(0, maxLen)}…`;
 }
 
+function parseRuleCitedForModal(ruleLine: string): { title: string; body: string } {
+  const colonIdx = ruleLine.indexOf(':');
+  if (colonIdx > 0 && /^\d/.test(ruleLine)) {
+    const title = ruleLine.slice(0, colonIdx).trim();
+    const body = ruleLine.slice(colonIdx + 1).trim();
+    return { title, body: body || ruleLine };
+  }
+  return { title: 'Rule cited', body: ruleLine };
+}
+
 export default function Index() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -232,6 +241,7 @@ export default function Index() {
   const [maxCardsError, setMaxCardsError] = useState<string | null>(null);
 
   const [flagged, setFlagged] = useState(false);
+  const [activeRuleCited, setActiveRuleCited] = useState<string | null>(null);
   const [flagModalVisible, setFlagModalVisible] = useState(false);
   const [flagReason, setFlagReason] = useState('');
   const [flagging, setFlagging] = useState(false);
@@ -642,7 +652,7 @@ export default function Index() {
   }, [selectedCards, selectedCategory, situation]);
 
   const onPressRuleTag = useCallback((ruleLine: string) => {
-    Alert.alert('Rule cited', ruleLine);
+    setActiveRuleCited(ruleLine);
   }, []);
 
   const onShareRuling = useCallback(async () => {
@@ -817,6 +827,7 @@ export default function Index() {
     setSituation('');
     setFlagged(false);
     setFlagModalVisible(false);
+    setActiveRuleCited(null);
     setFlagging(false);
     flagReasonRef.current = '';
     setFlagReason('');
@@ -830,8 +841,13 @@ export default function Index() {
   const goToStep2 = useCallback(() => {
     setErrorMessage(null);
     setRulingResult(null);
+    setActiveRuleCited(null);
     setStep(2);
   }, []);
+
+  const ruleCitedModalContent = activeRuleCited
+    ? parseRuleCitedForModal(activeRuleCited)
+    : null;
 
   return (
     <View
@@ -1400,6 +1416,50 @@ export default function Index() {
           </View>
         </View>
       </Modal>
+      <Modal
+        transparent
+        animationType="fade"
+        visible={activeRuleCited !== null}
+        onRequestClose={() => setActiveRuleCited(null)}>
+        <View style={styles.cardImageModalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss rule text"
+            style={styles.cardImageModalBackdrop}
+            onPress={() => setActiveRuleCited(null)}
+          />
+          <View
+            style={[styles.cardImageModalCenterLayer, styles.ruleCitedModalCenterLayer]}
+            pointerEvents="box-none">
+            <View style={styles.ruleCitedModalCard}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardGridDeselect,
+                  styles.ruleCitedModalDismiss,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setActiveRuleCited(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close rule text">
+                <Text style={styles.cardGridDeselectText}>✕</Text>
+              </Pressable>
+              {ruleCitedModalContent ? (
+                <>
+                  <Text style={styles.ruleCitedModalTitle}>{ruleCitedModalContent.title}</Text>
+                  <ScrollView
+                    style={styles.ruleCitedModalScroll}
+                    contentContainerStyle={styles.ruleCitedModalScrollContent}
+                    bounces={false}
+                    overScrollMode="never"
+                    showsVerticalScrollIndicator={false}>
+                    <Text style={styles.ruleCitedModalBody}>{ruleCitedModalContent.body}</Text>
+                  </ScrollView>
+                </>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal transparent animationType="fade" visible={flagModalVisible}>
         <View style={styles.flagModalOverlay}>
           <View style={styles.flagModalCard}>
@@ -1653,6 +1713,45 @@ const styles = StyleSheet.create({
   },
   flagModalActionButton: {
     flex: 1,
+  },
+  ruleCitedModalCenterLayer: {
+    padding: 16,
+  },
+  ruleCitedModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    backgroundColor: COLOURS.surface,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    position: 'relative',
+  },
+  ruleCitedModalDismiss: {
+    top: 10,
+    right: 10,
+  },
+  ruleCitedModalTitle: {
+    color: COLOURS.brandSoft,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: BODY_FONT,
+    marginBottom: 12,
+    paddingRight: 24,
+  },
+  ruleCitedModalScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  ruleCitedModalScrollContent: {
+    paddingBottom: 4,
+  },
+  ruleCitedModalBody: {
+    color: COLOURS.text,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: BODY_FONT,
   },
   cardImageModalRoot: {
     flex: 1,
