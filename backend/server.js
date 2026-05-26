@@ -50,7 +50,7 @@ const CATEGORY_ANCHORS = [
   'Copy Effects', 'Layers', 'Priority', 'Tokens',
   'Counters', 'Cost Reduction', 'Mana Value', 'Doubling',
   'Combat Damage', 'Blocking Restrictions',
-  'Enters the Battlefield', 'Dies Trigger', 'Sacrifice',
+  'Enters the Battlefield', 'Ability-Removing Effects', 'Sacrifice',
   'Exile', 'Graveyard', 'Regeneration', 'Phasing', 
 ];
 
@@ -660,7 +660,6 @@ app.post("/ruling", async (req, res) => {
 
   try {
     const oracleData = await fetchAllCardOracle(cards);
-    console.log("[/ruling] Scryfall oracleData:", JSON.stringify(oracleData, null, 2));
 
     const cardDataBlock = buildCardDataBlock(oracleData);
     console.log("[/ruling] CARD DATA block length:", cardDataBlock.length);
