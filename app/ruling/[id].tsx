@@ -103,6 +103,16 @@ function formatCrVersionLabel(raw: unknown): string | null {
   return `Comprehensive Rules (${readable})`;
 }
 
+function parseRuleCitedForModal(ruleLine: string): { title: string; body: string } {
+  const colonIdx = ruleLine.indexOf(':');
+  if (colonIdx > 0 && /^\d/.test(ruleLine)) {
+    const title = ruleLine.slice(0, colonIdx).trim();
+    const body = ruleLine.slice(colonIdx + 1).trim();
+    return { title, body: body || ruleLine };
+  }
+  return { title: 'Rule cited', body: ruleLine };
+}
+
 export default function SharedRulingScreen() {
   const rawId = useLocalSearchParams<{ id: string | string[] }>().id;
   const shareId =
@@ -131,6 +141,7 @@ export default function SharedRulingScreen() {
   const imageUriCacheRef = useRef(imageUriCache);
   imageUriCacheRef.current = imageUriCache;
   const [activeCardPopup, setActiveCardPopup] = useState<string | null>(null);
+  const [activeRuleCited, setActiveRuleCited] = useState<string | null>(null);
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [isRulesOpen, setIsRulesOpen] = useState(false);
 
@@ -185,6 +196,7 @@ export default function SharedRulingScreen() {
 
   useEffect(() => {
     setActiveCardPopup(null);
+    setActiveRuleCited(null);
   }, [shareId, ruling?.id]);
 
   useEffect(() => {
@@ -218,6 +230,10 @@ export default function SharedRulingScreen() {
   const modalShowLoading =
     !!modalCardName &&
     !Object.prototype.hasOwnProperty.call(imageUriCache, modalCardName);
+
+  const ruleCitedModalContent = activeRuleCited
+    ? parseRuleCitedForModal(activeRuleCited)
+    : null;
 
   return (
     <View style={styles.root}>
@@ -366,11 +382,14 @@ export default function SharedRulingScreen() {
                 <>
                   <View style={styles.rulesRow}>
                     {rulesCited.map((r, i) => (
-                      <View key={`${r}-${i}`} style={styles.ruleTag}>
-                        <Text style={styles.ruleTagText} numberOfLines={3}>
+                      <Pressable
+                        key={`${r}-${i}`}
+                        onPress={() => setActiveRuleCited(r)}
+                        style={({ pressed }) => [styles.ruleTag, pressed && styles.pressed]}>
+                        <Text style={styles.ruleTagText} numberOfLines={2}>
                           {r}
                         </Text>
-                      </View>
+                      </Pressable>
                     ))}
                   </View>
                   {crVersionLabel ? (
@@ -436,6 +455,50 @@ export default function SharedRulingScreen() {
                 onPress={() => setActiveCardPopup(null)}
                 style={styles.cardModalImagePressOverlay}
               />
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        transparent
+        animationType="fade"
+        visible={activeRuleCited !== null}
+        onRequestClose={() => setActiveRuleCited(null)}>
+        <View style={styles.cardImageModalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss rule text"
+            style={styles.cardImageModalBackdrop}
+            onPress={() => setActiveRuleCited(null)}
+          />
+          <View
+            style={[styles.cardImageModalCenterLayer, styles.ruleCitedModalCenterLayer]}
+            pointerEvents="box-none">
+            <View style={styles.ruleCitedModalCard}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardGridDeselect,
+                  styles.ruleCitedModalDismiss,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setActiveRuleCited(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close rule text">
+                <Text style={styles.cardGridDeselectText}>✕</Text>
+              </Pressable>
+              {ruleCitedModalContent ? (
+                <>
+                  <Text style={styles.ruleCitedModalTitle}>{ruleCitedModalContent.title}</Text>
+                  <ScrollView
+                    style={styles.ruleCitedModalScroll}
+                    contentContainerStyle={styles.ruleCitedModalScrollContent}
+                    bounces={false}
+                    overScrollMode="never"
+                    showsVerticalScrollIndicator={false}>
+                    <Text style={styles.ruleCitedModalBody}>{ruleCitedModalContent.body}</Text>
+                  </ScrollView>
+                </>
+              ) : null}
             </View>
           </View>
         </View>
@@ -740,6 +803,63 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: BODY_FONT,
     fontSize: 12,
+  },
+  ruleCitedModalCenterLayer: {
+    padding: 16,
+  },
+  ruleCitedModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    backgroundColor: COLOURS.surface,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLOURS.border,
+    position: 'relative',
+  },
+  ruleCitedModalDismiss: {
+    top: 10,
+    right: 10,
+  },
+  ruleCitedModalTitle: {
+    color: COLOURS.brandSoft,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: BODY_FONT,
+    marginBottom: 12,
+    paddingRight: 24,
+  },
+  ruleCitedModalScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  ruleCitedModalScrollContent: {
+    paddingBottom: 4,
+  },
+  ruleCitedModalBody: {
+    color: COLOURS.text,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: BODY_FONT,
+  },
+  cardGridDeselect: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 99,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardGridDeselectText: {
+    color: COLOURS.error,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   crVersionText: {
     marginTop: 14,
