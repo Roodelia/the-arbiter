@@ -150,17 +150,17 @@ function buildOfficialRulingsBlock(oracleData) {
 }
 
 async function fetchAllCardOracle(cards) {
-  const oracleData = [];
-  for (const cardName of cards) {
-    const cardInfo = await fetchCardOracle(cardName);
-    oracleData.push(cardInfo);
-  }
-  return oracleData;
+  return Promise.all(cards.map((cardName) => fetchCardOracle(cardName)));
 }
 
 function extractCardOracleTexts(oracleData) {
   return oracleData
-    .map((c) => (typeof c.oracle_text === "string" ? c.oracle_text.trim() : ""))
+    .map((c) => {
+      const oracle =
+        typeof c.oracle_text === "string" ? c.oracle_text.trim() : "";
+      if (oracle) return oracle;
+      return typeof c.name === "string" ? c.name.trim() : "";
+    })
     .filter(Boolean);
 }
 

@@ -198,8 +198,25 @@ async function expandSingleHit(supabase, hit, parentRuleNumber, queryEmbedding) 
 }
 
 async function expandTopHits(supabase, baseMatches, queryEmbedding, mergedByRuleNumber) {
-  const topHits = baseMatches.slice(0, RAG_CONFIG.expansionTopHits);
-  const parentByHitRule = await resolveParentRuleNumbers(supabase, topHits);
+  const parentByHitRule = await resolveParentRuleNumbers(
+    supabase,
+    baseMatches.slice(
+      0,
+      RAG_CONFIG.expansionTopHits + EXPANSION_BLOCKLIST.size,
+    ),
+  );
+
+  const topHits = [];
+  for (const hit of baseMatches) {
+    if (topHits.length >= RAG_CONFIG.expansionTopHits) break;
+    const hitRuleNumber = getRuleNumber(hit);
+    if (!hitRuleNumber) continue;
+    const parentRuleNumber = parentByHitRule.get(hitRuleNumber) ?? null;
+    const isBlocklisted = parentRuleNumber
+      ? EXPANSION_BLOCKLIST.has(parentRuleNumber)
+      : EXPANSION_BLOCKLIST.has(hitRuleNumber);
+    if (!isBlocklisted) topHits.push(hit);
+  }
 
   const expansionResults = await Promise.all(
     topHits.map((hit) => {
