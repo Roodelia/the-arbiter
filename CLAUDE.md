@@ -22,7 +22,7 @@ Casual MTG players who encounter rules disputes during games.
 - LLM: Anthropic Claude — claude-haiku-4-5-20251001 for category generation; claude-sonnet-4-6 for rulings
 - Embeddings: Voyage AI (voyage-3.5, 1024 dimensions)
 - Vector DB: Supabase pgvector (comprehensive_rules table)
-- CR indexing: scripts/embed_rules.py chunks by rule number; each chunk includes `parent_rule_number` (null for base rules like `702.15`, populated for lettered subrules like `702.15a -> 702.15`). The `comprehensive_rules` table includes an index on `parent_rule_number` for sibling expansion queries, a `cr_version` column (YYYY-MM-DD), and after vector search the top 3 hits are expanded to include parent/sibling rules before context is sent to Claude. Re-run when Wizards publishes a new CR file.
+- CR indexing: scripts/embed_rules.py chunks by rule number; stores `rule_text` (display, with section/rule prefixes) and `rule_text_for_embedding` (clean text for Voyage). Each chunk has `parent_rule_number` (null for base rules like `702.15`, set for lettered subrules like `702.15a -> 702.15`). Re-run when Wizards publishes a new CR file.
 - Card data: Scryfall API (free, no auth, fuzzy name search + rulings endpoint)
 - Analytics: Vercel Analytics
 
@@ -32,25 +32,31 @@ Casual MTG players who encounter rules disputes during games.
 - Database: Supabase
 
 ## Architecture
-All API keys live on the backend Express server. The React Native app
-calls the backend only — never Anthropic, Voyage, or Supabase directly.
-Express uses `trust proxy` (one hop) so `req.ip` and rate limiting align
-with the real client when the app runs behind Railway.
+All API keys live on the backend Express server. 
+The React Native app calls the backend only — never Anthropic, Voyage, or Supabase directly.
+Express uses `trust proxy` (one hop) so `req.ip` and rate limiting align with the real client when the app runs behind Railway.
 
 ### Backend Endpoints
 POST /categories
   - Input: { cards: string[] }
   - Fetches Scryfall oracle text + official WotC rulings per card
-  - Calls Claude to generate 3-5 relevant interaction category labels
+  - Calls Claude Haiku with a curated `CATEGORY_ANCHORS` list; model must pick from anchors when one fits (1–4 labels, free-form only if no anchor fits)
   - Returns: { categories: string[] }
 
 POST /ruling
   - Input: { cards: string[], case_id?: string, situation?: string, category?: string }
   - Fetches Scryfall oracle text + official WotC rulings per card
-  - Embeds query with Voyage AI, retrieves top 8 CR chunks from Supabase (match_rules)
-  - Calls Claude with retrieved CR context + oracle text + official rulings
+  - Builds Voyage query from card oracle texts + situation + category; embeds with voyage-3.5 (`inputType: "query"`)
+  - Vector search: Supabase `match_rules` with `match_count: 8`
+  - **Retrieval anchors** (`RETRIEVAL_ANCHORS`): regex patterns on situation + oracle text inject specific CR rules (e.g. ability loss → 613.1) if not already in vector hits; marked `anchored: true` in `rag_matches`
+  - **Parent/sibling expansion**: top **2** vector hits (not 3) expand to related rules — parent + siblings, or children if hit is a base rule — reranked by cosine similarity to query, up to 5 per hit; skipped for rules on `EXPANSION_BLOCKLIST` (e.g. 702, 704.5)
+  - Merges vector + anchored + expanded rules; sorts anchored first, then semantic hits, then expanded; caps context at **12** rules (`RAG_CONTEXT_CAP`) — anchored kept, then semantic, then expanded fill remainder
+  - Calls Claude Sonnet (`claude-sonnet-4-6`) with cached `RULING_SYSTEM_PROMPT`; user message includes CARD DATA block, RAG CR chunks, official Scryfall rulings, and situation/category focus instructions
+  - Parses model output (`parseRulingResponse`); resolves `RULES CITED` rule numbers to full CR text from Supabase (exact match, then fuzzy prefix)
+  - Optional: if `case_id` provided, fire-and-forget upsert of `rag_matches` to `cases` table
+  - Sends Telegram alert on successful ruling (if configured)
   - Returns: { ruling, explanation, rules_cited, oracle_referenced, cr_version, rag_matches }
-  - `rag_matches` is an array of { rule_number, similarity, expanded } for logging/debugging
+  - `rag_matches`: { rule_number, similarity, expanded, anchored, anchor_label? } per rule sent to the model
 
 POST /log
   - Input: { session_id, case_id, cards, selected_category?,
@@ -127,24 +133,13 @@ Step 3 — View Verdict
   - Selected categories shown (if any), labelled "Interaction / Scenario"
   - Verdict card: gold focus strip, "VERDICT" title, ruling text
   - Collapsible EXPLANATION section (chevron toggle, bullet points)
-  - Collapsible RULES CITED section (chevron toggle, tappable rule tags → native alert with full text)
+  - Collapsible RULES CITED section (chevron toggle, tappable rule tags → modal with full CR text; backdrop tap or ✕ to dismiss)
   - Actions below divider:
     - "Ask another question" (primary, full-width — resets all state)
     - "Share this verdict" (confirm-colored fill; Sharing… / ✓ Link copied!)
     - "← Describe the scenario again" (text link back to Step 2)
     - "Flag this Verdict" (error-colored text action)
   - Flag flow: immediate logCase on tap → modal for optional reason → confirm
-
-## Button Labels
-- Step 1 proceed: "Ask ManaJudge"
-- Step 2 back: "← reselect cards"
-- Step 2 confirm: "Get Verdict"
-- Step 2 loading: "Deliberating…"
-- Step 3 reset (new case from step 1): "Ask another question"
-- Step 3 share: "Share this verdict"
-- Step 3 back (to context): "← Describe the scenario again"
-- Step 3 flag: "Flag this Verdict"
-- Step 3 flag confirmed: "✓ Verdict flagged. Thank you."
 
 ## Usage Logging (Supabase cases table)
 Logged across the flow (same case_id, upserted):
@@ -160,7 +155,7 @@ ip_address (text, nullable) stores the client IP for each upsert.
 Images are never stored — only card names.
 
 ## Database (Supabase)
-- **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, parent_rule_number, embedding (vector(1024)), cr_version (text)
+- **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, rule_text_for_embedding, parent_rule_number, embedding (vector(1024)), cr_version (text); index on `parent_rule_number` for expansion queries
 - **cases** — usage logging (see Usage Logging above); includes ip_address (add via backend/sql/add_cases_ip_address.sql if missing)
 - **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, cr_version, created_at
 
@@ -170,28 +165,8 @@ Images are never stored — only card names.
 - Exception: GET /share/featured is read-only and not rate-limited
 - 429 response shows friendly message in UI
 
-## Colour Palette (theme.ts COLOURS object)
-- Background (ink black): #070611
-- Surface (midnight violet): #0b0a1a
-- bgRuling (warm violet tint): #1b1940
-- bgAccent (lighter violet): #2d2a57
-- Brand (dark goldenrod): #a67c2e — ruling border, logo, focus strip, featured titles, carousel arrows
-- brandSoft: #cbb89d — ruling verdict title text, carousel active dots
-- brandDim: #7A5B23 — rule tag border/text
-- brandStrong: #9f8f76 — ruling card border
-- Action (dark amaranth): #5a1523 — primary CTAs, flag/remove marks
-- Authority: #7a1c2e
-- Error: #B85C38 — validation, flag text
-- Confirm (dark emerald): #1F3D36 — share button fill, collapsible chevrons
-- Text: #f0f0f0 — primary text, button text on dark fills
-- textSecondary: #A0A6B0 — chip text, helper text, share button text
-- textMuted: #6F7682 — section labels, placeholders
-- textInverted: #0b0a1a
-- Border: #2a2535 — container/input/chip borders
-- chipBorder: #2a2535
-- Placeholder: #3a3a3a
-- Font: serif (title / TITLE_FONT), sans-serif (body / BODY_FONT)
-- Palatino family used only in SVG logo
+## Colour Palette & Typography
+- Use `constants/theme.ts` as the source of truth for colours (`COLOURS`), fonts (`TITLE_FONT`, `BODY_FONT`), and shared UI constants (`GENERIC_ERROR_MESSAGE`). Do not duplicate hex values or token names here.
 
 ## Logo
 - Primary in-app title asset: `assets/images/manajudge_title.png` (used in main and shared pages)
@@ -204,11 +179,12 @@ Images are never stored — only card names.
 - No overscroll bounce (bounces={false}, overScrollMode="never")
 - No auto-zoom on input focus (fontSize: 16 on all inputs)
 - maximum-scale=1 in viewport meta tag
-- Content padding: paddingHorizontal 16, paddingTop 12, paddingBottom 24
-- Max content width: 600px centred on desktop
+- **Page scroll content** (main app `app/index.tsx` ScrollView `contentContainerStyle`; shared ruling `app/ruling/[id].tsx` `styles.scrollContent`): `paddingHorizontal` 16, `paddingTop` 12, `paddingBottom` 24; `maxWidth` 600, `width` `'100%'`, `alignSelf` `'center'`, `flexGrow` 1
+- **Verdict card** (`step3RulingSection`): inner padding `paddingHorizontal` 16, `paddingTop` / `paddingBottom` 16 (inside the scroll padding above)
+- **Primary CTAs** (`primaryActionButton`): `minHeight` 52, `paddingHorizontal` 16, `paddingVertical` 14
+- **Text inputs** (`styles.input`): `minHeight` 44, `paddingHorizontal` 12, `paddingVertical` 6, `fontSize` 16 (situation / flag reason / search)
 - Collapsible sections use chevron icons (▸ collapsed, ▾ expanded) in confirm color
 - Card image modal on Step 3: tapping card chip opens full-size card image overlay
-- Category chip selected state: bgAccent fill, white bold text (no longer cinnamon buff)
 
 ## Shared Ruling Page (app/ruling/[id].tsx)
 - Fetches ruling from GET /share/:id
@@ -216,7 +192,7 @@ Images are never stored — only card names.
 - Card chips (tappable → card image popup modal with lazy Scryfall image loading)
 - Situation/interaction section if present (category labels + situation text)
 - Verdict card (same styling as Step 3)
-- Collapsible Explanation and Rules Cited sections
+- Collapsible Explanation and Rules Cited sections (rule tags open full-text modal, same as Step 3)
 - CR version label at bottom right (formatted as "Comprehensive Rules (Mon DD, YYYY)")
 - "Ask ManaJudge" button to navigate home
 
@@ -232,9 +208,12 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - app/+html.tsx — web HTML wrapper (viewport, overscroll, analytics)
 - app/_layout.tsx — Expo Router layout (headerShown: false)
 - backend/server.js — Express backend (all API endpoints)
+- backend/config/rag.js — RAG tunables (match count, expansion limits, context cap)
+- backend/services/rag.js — RAG retrieval pipeline (anchors, expansion, cap)
+- backend/data/retrieval-anchors.js — pattern-based CR rule injection for /ruling
 - constants/theme.ts — shared colours/fonts/error constant (COLOURS object, TITLE_FONT, BODY_FONT, GENERIC_ERROR_MESSAGE)
 - utils/scryfall.ts — shared `fetchCardImageUri` helper
-- scripts/embed_rules.py — CR download, chunk (section-prefixed text), embed, upload (stores cr_version per row)
+- scripts/embed_rules.py — CR download, chunk (`rule_text` for display, `rule_text_for_embedding` for Voyage), embed, upload (stores cr_version per row)
 - scripts/mtg_judge_test.py — Python test suite for the ruling engine
 - CLAUDE.md — this file
 
