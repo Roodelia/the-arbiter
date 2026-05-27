@@ -210,6 +210,13 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - backend/server.js — Express backend (all API endpoints)
 - backend/config/rag.js — RAG tunables (match count, expansion limits, context cap)
 - backend/services/rag.js — RAG retrieval pipeline (anchors, expansion, cap)
+- backend/services/ruling.js — /ruling orchestration (Scryfall → RAG → Claude → citations)
+- backend/services/scryfall.js — Scryfall fetch + card prompt blocks
+- backend/services/ruling-parse.js — Claude ruling response section parser
+- backend/services/rules-cited.js — CR citation resolution for API responses
+- backend/prompts/ruling-system.js — Sonnet system prompt for /ruling
+- backend/config/ruling.js — ruling model + token limits
+- backend/data/category-anchors.js — curated labels for /categories Haiku chips
 - backend/data/retrieval-anchors.js — pattern-based CR rule injection for /ruling
 - constants/theme.ts — shared colours/fonts/error constant (COLOURS object, TITLE_FONT, BODY_FONT, GENERIC_ERROR_MESSAGE)
 - utils/scryfall.ts — shared `fetchCardImageUri` helper

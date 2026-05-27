@@ -7,54 +7,20 @@ const Anthropic = require("@anthropic-ai/sdk");
 const { VoyageAIClient } = require("voyageai");
 const { createClient } = require("@supabase/supabase-js");
 const rateLimit = require('express-rate-limit');
-const { RAG_CONFIG } = require("./config/rag");
-const { retrieveRagContext } = require("./services/rag");
-const CR_VERSION = process.env.CR_VERSION || "unknown";
-
-const CATEGORY_ANCHORS = [
-  // 702 Keyword Abilities (complete, CR-sourced)
-  'Deathtouch', 'Defender', 'Double Strike', 'Enchant', 'Equip',
-  'First Strike', 'Flash', 'Flying', 'Haste', 'Hexproof',
-  'Indestructible', 'Intimidate', 'Landwalk', 'Lifelink', 'Protection',
-  'Reach', 'Shroud', 'Trample', 'Vigilance', 'Ward', 'Banding',
-  'Rampage', 'Cumulative Upkeep', 'Flanking', 'Phasing', 'Buyback',
-  'Shadow', 'Cycling', 'Echo', 'Horsemanship', 'Fading', 'Kicker',
-  'Flashback', 'Madness', 'Fear', 'Morph', 'Amplify', 'Provoke',
-  'Storm', 'Affinity', 'Entwine', 'Modular', 'Sunburst', 'Bushido',
-  'Soulshift', 'Splice', 'Offering', 'Ninjutsu', 'Epic', 'Convoke',
-  'Dredge', 'Transmute', 'Bloodthirst', 'Haunt', 'Replicate',
-  'Forecast', 'Graft', 'Recover', 'Ripple', 'Split Second', 'Suspend',
-  'Vanishing', 'Absorb', 'Aura Swap', 'Delve', 'Fortify', 'Frenzy',
-  'Gravestorm', 'Poisonous', 'Transfigure', 'Champion', 'Changeling',
-  'Evoke', 'Hideaway', 'Prowl', 'Reinforce', 'Conspire', 'Persist',
-  'Wither', 'Retrace', 'Devour', 'Exalted', 'Unearth', 'Cascade',
-  'Annihilator', 'Level Up', 'Rebound', 'Umbra Armor', 'Infect',
-  'Battle Cry', 'Living Weapon', 'Undying', 'Miracle', 'Soulbond',
-  'Overload', 'Scavenge', 'Unleash', 'Cipher', 'Evolve', 'Extort',
-  'Fuse', 'Bestow', 'Tribute', 'Dethrone', 'Outlast', 'Prowess',
-  'Dash', 'Exploit', 'Menace', 'Renown', 'Awaken', 'Devoid', 'Ingest',
-  'Myriad', 'Surge', 'Skulk', 'Emerge', 'Escalate', 'Melee', 'Crew',
-  'Fabricate', 'Partner', 'Undaunted', 'Improvise', 'Aftermath',
-  'Embalm', 'Eternalize', 'Afflict', 'Ascend', 'Assist', 'Jump-Start',
-  'Mentor', 'Afterlife', 'Riot', 'Spectacle', 'Escape', 'Companion',
-  'Mutate', 'Encore', 'Boast', 'Foretell', 'Demonstrate',
-  'Daybound', 'Nightbound', 'Disturb', 'Decayed', 'Cleave', 'Training',
-  'Compleated', 'Reconfigure', 'Blitz', 'Casualty', 'Enlist',
-  'Read Ahead', 'Ravenous', 'Squad', 'Prototype', 'Living Metal',
-  'Toxic', 'Backup', 'Bargain', 'Craft', 'Disguise', 'Plot', 'Saddle',
-  'Spree', 'Freerunning', 'Gift', 'Offspring', 'Impending', 'Exhaust',
-  'Harmonize', 'Mobilize', 'Warp', 'Mayhem', 'Sneak', 'Increment', 
-  'Tiered', 'Station', 'Web-Slinging', 'Firebending',
-  'Start Your Engines!', 'Max Speed', 'Job Select', 'Paradigm',
-  // Critical interaction terms
-  'Continuous Effects', 'Replacement Effects', 'Triggered Abilities',
-  'Activated Abilities', 'Static Abilities', 'State-Based Actions',
-  'Copy Effects', 'Layers', 'Priority', 'Tokens',
-  'Counters', 'Cost Reduction', 'Mana Value', 'Doubling',
-  'Combat Damage', 'Blocking Restrictions',
-  'Enters the Battlefield', 'Ability-Removing Effects', 'Sacrifice',
-  'Exile', 'Graveyard', 'Regeneration', 'Phasing', 
-];
+const {
+  generateRuling,
+  RulingGenerationError,
+} = require("./services/ruling");
+const {
+  CategoryGenerationError,
+  generateCategories,
+} = require("./services/categories");
+const {
+  CR_VERSION,
+  GENERIC_SERVER_ERROR_MESSAGE,
+  SHARE_APP_BASE,
+} = require("./config/app");
+const { isNonEmptyStringArray } = require("./utils/validators");
 
 async function sendTelegramAlert({ cards, situation, ruling }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -110,106 +76,6 @@ const shareLimiter = rateLimit({
     return path === "/share/featured";
   },
 });
-
-const RULING_SYSTEM_PROMPT = `You are an expert Magic: The Gathering judge.
-Your role is to provide accurate, cited rulings for game situations.
-
-GROUND TRUTH — CANONICAL CARD DATA:
-The user message includes a CARD DATA section containing authoritative card information pulled directly from Scryfall.
-You MUST treat this data as the single source of truth for:
-- Mana costs (including exact generic and colored mana symbols)
-- Power and toughness
-- Oracle text
-- Type line and supertypes/subtypes
-
-NEVER restate a card's mana cost, P/T, or oracle text from memory. ALWAYS reference the CARD DATA block when citing these values.
-
-Key Principles:
-- Never assume an interaction does NOT exist without checking
-- Always consider recursive interactions (A affects B which affects A)
-- Show explicit calculations for any numerical results
-- If you find yourself dismissing or "explaining away" a retrieved Scryfall ruling or CR rule that contradicts your reasoning, STOP.  The retrieved source is more reliable than your reasoning.
-- When retrieved Scryfall card-specific rulings explicitly address the scenario you're judging, treat them as highly authoritative — they are Wizards' own clarifications of how CR rules apply. Do not dismiss them in favor of your own derivation from abstract CR text.
-
-CRITICAL INTERACTION RULES:
-1. CONTROLLER IDENTITY: "You"/"your" in a spell's text always refers to its controller. When retargeted, the controller does NOT change — new targets must be legal from the original controller's perspective.
-2. CAST vs ETB TIMING: "When you cast" triggers resolve BEFORE the spell resolves. "When [this] enters the battlefield" triggers happen AFTER. Never treat them as simultaneous.
-3. REPLACEMENT EFFECTS ("Instead" / "Skip" / "enters with" / "As") modify events as they happen, don't use the stack, and apply only once per event (CR 614). When multiple replacement effects apply, the affected controller chooses the order. 
-4. TRIGGERED ABILITIES ("at", "whenever", "when") happen after the event and use the stack. 
-5. LAYERS: Continuous effects apply in order: (1) copy, (2) control, (3) text, (4) type, (5) color, (6) abilities, (7) P/T. Earlier layers always apply first regardless of timestamp.
-6. STATE-BASED ACTIONS: Checked when a player would receive priority. Happen simultaneously, don't use the stack. Includes: 0 toughness, lethal damage, 0 life, legend rule, counter cancellation.
-7. MULTIPLICATIVE vs ADDITIVE replacement effects: "twice that many" is multiplicative where N doublers = 2^N × original. "three times" is multiplicative. "triggers an additional time" (trigger replacements) is additive where N instances = N + 1 total triggers, never 2^N.
-8. INTERVENING "IF" CLAUSES (CR 603.4): A triggered ability written as "When/Whenever/At [trigger], if [condition], [effect]" performs TWO checks on the condition: 
-  - FIRST CHECK at trigger time: if the condition is false, the ability does not trigger at all. 
-  - SECOND CHECK on resolution: if the condition has since become false, the ability is removed from the stack and does nothing.
-
-Before writing your response, reason through these passes internally without outputting them:
-
-INTERNAL PASS 1 — RELEVANT ABILITIES:
-For each card, list every triggered ability, static ability, replacement effect, 
-and activated ability. For each, identify:
-- TYPE: triggered / static / replacement / activated
-- WHAT IT GENERATES: a one-shot effect, a continuous effect, a trigger on the stack, or a cost reduction
-- PERSISTENCE: if this is a static ability generating a continuous effect, does that effect persist if the source loses the ability or leaves the battlefield? (CR 611.2a)
-Do not skip any ability even if it seems irrelevant at first.
-
-INTERNAL PASS 2 — INTERACTION POINTS:
-For each ability ask:
-- Does any other card modify WHEN this happens, HOW MANY TIMES, WHAT it produces, 
-  or its RESULTS?
-- Does any other card REMOVE this ability or prevent it from generating its effect?
-- If this is a static ability with a continuous effect, does any other card 
-  alter the source of the effect (its abilities, its types, its zone)?
-- Does any other card's continuous effect overlap with this one in the layers?
-Work through every combination, not just the obvious ones.
-
-INTERNAL PASS 3 — LAYER ORDER:
-Apply effects in correct game order:
-1. Static abilities and continuous effects first. (apply layers per critical interaction rule 5)
-2. Replacement effects
-3. Triggered abilities in APNAP order
-4. For each triggered ability, check if any doubling effects apply
-5. For tokens or permanents created, re-check all triggers recursively
-
-INTERNAL PASS 4 — CALCULATIONS:
-Where quantities are involved (tokens, triggers, counters),
-explicitly calculate the total showing your working:
-"X triggers × Y doublers = Z total"
-Account for recursive interactions where one effect feeds 
-into another.
-
-INTERNAL PASS 5 — CONSISTENCY CHECK:
-Before writing the RULING line, verify that your final answer is supported 
-by every bullet in your EXPLANATION. If any bullet contradicts the RULING, 
-the RULING is wrong — revise it to match the bullet, not the other way around. 
-A contradicted RULING is worse than no answer.
-
-Once you have completed all internal passes, output ONLY the four sections
-below, in plain text and no markdown formmating, in this exact order: EXPLANATION, RULES CITED, CARD ORACLE TEXT
-REFERENCED, RULING. The RULING must come LAST so it is derived from your
-reasoning above, not committed to before reasoning. Do not include pass
-labels or internal calculations in the output.
-
-EXPLANATION: [Bullet points. One • per line, 3-5 bullets maximum. Each bullet is one key point of reasoning.
-No pass labels or internal working.]
-
-RULES CITED: [Comma-separated rule numbers that are LOAD-BEARING for the verdict —
-i.e., rules without which the ruling could not be made. Do not cite tangentially
-relevant rules. Maximum 4 rules. Format: 702.15a, 601.2c — no rule text.]
-
-CARD ORACLE TEXT REFERENCED: [Which cards and which parts apply]
-
-RULING: [Clear one or two sentence ruling with final numbers. The RULING
-must be consistent with and supported by the EXPLANATION above. If the
-EXPLANATION reasoning leads to a different conclusion than your initial
-intuition, the EXPLANATION wins — revise the RULING to match. If you are
-genuinely uncertain, prefix the RULING with "UNCERTAIN:" and explain in
-the EXPLANATION above what would resolve the uncertainty.]`;
-
-const GENERIC_SERVER_ERROR_MESSAGE =
-  "Something went wrong. Please try again.";
-
-const SHARE_APP_BASE = "https://manajudge.com";
 
 function generateShareId() {
   const alphabet =
@@ -267,337 +133,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-async function fetchCardOracle(cardName) {
-  const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(
-    cardName,
-  )}`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Scryfall error for "${cardName}": ${res.statusText}`);
-    }
-    const data = await res.json();
-
-    let officialRulings = [];
-    try {
-      // Be polite to Scryfall: delay between requests.
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      const cardId = data?.id;
-      if (cardId) {
-        const rulingsRes = await fetch(
-          `https://api.scryfall.com/cards/${cardId}/rulings`
-        );
-        if (rulingsRes.ok) {
-          const rulings_data = await rulingsRes.json();
-          officialRulings = Array.isArray(rulings_data?.data)
-            ? rulings_data.data
-                .filter((r) => r?.source === "wotc")
-                .map((r) => r?.comment)
-                .filter((comment) => typeof comment === "string")
-            : [];
-        }
-      }
-    } catch (rulingsErr) {
-      // If official rulings fail, continue without them.
-      officialRulings = [];
-    }
-
-    return {
-      name: data.name,
-      mana_cost: data.mana_cost || "",
-      oracle_text: data.oracle_text || "",
-      type_line: data.type_line || "",
-      power: data.power || null,
-      toughness: data.toughness || null,
-      loyalty: data.loyalty || null,
-      card_faces: Array.isArray(data.card_faces)
-        ? data.card_faces.map((face) => ({
-            name: face?.name || "",
-            mana_cost: face?.mana_cost || "",
-            type_line: face?.type_line || "",
-            oracle_text: face?.oracle_text || "",
-            power: face?.power || null,
-            toughness: face?.toughness || null,
-            loyalty: face?.loyalty || null,
-          }))
-        : [],
-      image_uri:
-        data.image_uris?.normal ||
-        data.image_uris?.large ||
-        data.card_faces?.[0]?.image_uris?.normal ||
-        null,
-      rulings: officialRulings,
-    };
-  } catch (err) {
-    console.error("Error fetching Scryfall oracle:", { cardName, error: err });
-    throw err;
-  }
-}
-
-/**
- * Builds a human-readable card summary block for non-canonical contexts only:
- * category generation prompt input and /ruling oracle_referenced fallback text.
- */
-function buildCardSummaryBlock(oracleData, { includeStats = false } = {}) {
-  return oracleData
-    .map((c) => {
-      const stats =
-        includeStats && c.power != null && c.toughness != null
-          ? ` (${c.power}/${c.toughness})`
-          : "";
-      const rulingsBlock =
-        c.rulings && c.rulings.length > 0
-          ? "\nOfficial Rulings:\n" + c.rulings.map((r) => `• ${r}`).join("\n")
-          : "";
-      return `${c.name}${stats}\n${c.type_line}\n${c.oracle_text}${rulingsBlock}`;
-    })
-    .join("\n\n");
-}
-
-function buildCardDataBlock(oracleData) {
-  const cardsText = oracleData
-    .map((c) => {
-      const lines = [];
-      lines.push(`Card: ${c.name}`);
-
-      const hasFaces = Array.isArray(c.card_faces) && c.card_faces.length > 0;
-      if (hasFaces) {
-        c.card_faces.forEach((face, idx) => {
-          const label =
-            idx === 0
-              ? "Front Face"
-              : idx === 1
-                ? "Back Face"
-                : `Face ${idx + 1}`;
-          lines.push(`${label}: ${face.name || ""}`.trim());
-          if (face.mana_cost) lines.push(`Mana Cost: ${face.mana_cost}`);
-          if (face.type_line) lines.push(`Type: ${face.type_line}`);
-          if (face.oracle_text) lines.push(`Oracle Text: ${face.oracle_text}`);
-          if (face.power != null && face.toughness != null) {
-            lines.push(`Power/Toughness: ${face.power}/${face.toughness}`);
-          }
-          if (face.loyalty != null) {
-            lines.push(`Loyalty: ${face.loyalty}`);
-          }
-        });
-      } else {
-        if (c.mana_cost) lines.push(`Mana Cost: ${c.mana_cost}`);
-        if (c.type_line) lines.push(`Type: ${c.type_line}`);
-        if (c.oracle_text) lines.push(`Oracle Text: ${c.oracle_text}`);
-        if (c.power != null && c.toughness != null) {
-          lines.push(`Power/Toughness: ${c.power}/${c.toughness}`);
-        }
-        if (c.loyalty != null) {
-          lines.push(`Loyalty: ${c.loyalty}`);
-        }
-      }
-
-      return lines.join("\n");
-    })
-    .join("\n\n");
-
-  return `=== CARD DATA (authoritative — use these values exactly) ===
-
-${cardsText}
-
-=== END CARD DATA ===`;
-}
-
-function buildOfficialRulingsBlock(oracleData) {
-  return oracleData
-    .map((c) => {
-      const lines = [`Card: ${c.name}`];
-      if (Array.isArray(c.rulings) && c.rulings.length > 0) {
-        lines.push("Official Rulings:");
-        lines.push(...c.rulings.map((r) => `• ${r}`));
-      } else {
-        lines.push("Official Rulings: (none)");
-      }
-      return lines.join("\n");
-    })
-    .join("\n\n");
-}
-
-async function fetchAllCardOracle(cards) {
-  const oracleData = [];
-  for (const cardName of cards) {
-    const cardInfo = await fetchCardOracle(cardName);
-    oracleData.push(cardInfo);
-  }
-  return oracleData;
-}
-
-/** Strips optional ``` / ```json fences Haiku sometimes wraps JSON in. */
-function normalizeClaudeJsonText(text) {
-  const s = String(text ?? "").trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) return fence[1].trim();
-  return s;
-}
-
-function escapeRegExp(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * CR rows from embed_rules use "702. Keyword Abilities — Rule 702.3a: …" or "Rule 104.1: …".
- * For API responses we return only the cited rule number and the substantive text.
- */
-function stripCrRuleDisplayPrefix(ruleNumber, ruleTextFromDb) {
-  const raw = String(ruleTextFromDb ?? "");
-  const num = String(ruleNumber ?? "").trim();
-  if (!num || !raw.trim()) return raw.trim();
-
-  const esc = escapeRegExp(num);
-  const withSection = new RegExp(`^.*? — Rule ${esc}:\\s*`);
-  let rest = raw.replace(withSection, "");
-  if (rest === raw) {
-    const ruleOnly = new RegExp(`^Rule ${esc}:\\s*`);
-    rest = raw.replace(ruleOnly, "");
-  }
-  const out = rest.trim();
-  return out.length > 0 ? out : raw.trim();
-}
-
-function formatRulesCitedForClient(rulesCited) {
-  if (!Array.isArray(rulesCited)) return rulesCited;
-  return rulesCited.map((entry) => {
-    if (typeof entry !== "string") return entry;
-    const sep = ": ";
-    const idx = entry.indexOf(sep);
-    if (idx === -1) return entry;
-    const num = entry.slice(0, idx).trim();
-    const body = entry.slice(idx + sep.length);
-    const cleaned = stripCrRuleDisplayPrefix(num, body);
-    return `${num}: ${cleaned}`;
-  });
-}
-
-function parseRulingResponse(rawText) {
-  const text = rawText.replace(/\r\n/g, "\n");
-
-  const SECTION_HEADERS = [
-    "RULING",
-    "EXPLANATION",
-    "RULES CITED",
-    "CARD ORACLE TEXT REFERENCED",
-  ];
-
-  const headerAlternation = SECTION_HEADERS.map((h) =>
-    h.replace(/ /g, "\\s+"),
-  ).join("|");
-  const anyHeaderLookahead = `(?=(?:\\n|^)\\s*(?:${headerAlternation}):\\s*|$)`;
-
-  const extract = (headerName) => {
-    const headerPattern = headerName.replace(/ /g, "\\s+");
-    const re = new RegExp(
-      `(?:\\n|^)\\s*${headerPattern}:\\s*([\\s\\S]*?)${anyHeaderLookahead}`,
-      "i",
-    );
-    const match = text.match(re);
-    return match ? match[1].trim() : "";
-  };
-
-  const allRulingMatches = [...text.matchAll(/(?:\n|^)\s*RULING:\s*/gi)];
-  let rulingText = "";
-  if (allRulingMatches.length > 0) {
-    const lastRulingStart = allRulingMatches[allRulingMatches.length - 1].index;
-    const tail = text.slice(lastRulingStart);
-    const re = new RegExp(
-      `(?:\\n|^)\\s*RULING:\\s*([\\s\\S]*?)${anyHeaderLookahead}`,
-      "i",
-    );
-    const match = tail.match(re);
-    rulingText = match ? match[1].trim() : "";
-  }
-
-  return {
-    ruling: rulingText,
-    explanation: extract("EXPLANATION"),
-    rules_cited: extract("RULES CITED"),
-    card_oracle_text_referenced: extract("CARD ORACLE TEXT REFERENCED"),
-  };
-}
-
 app.post("/categories", async (req, res) => {
   const { cards } = req.body || {};
 
-  if (!Array.isArray(cards) || cards.length === 0) {
+  if (!isNonEmptyStringArray(cards)) {
     return res
       .status(400)
       .json({ error: "cards must be a non-empty string array" });
   }
 
   try {
-    const oracleData = await fetchAllCardOracle(cards);
-
-    const anchorList = CATEGORY_ANCHORS.join(', ');
-
-    const categoryPrompt = `You are an expert Magic: The Gathering rules judge. Given the cards and situation, identify 1–4 interaction categories that best describe what rules are at play.
-
-ANCHOR LIST:
-${anchorList}
-
-INSTRUCTIONS:
-- You MUST pick labels from the anchor list above whenever one fits.
-- Prefer exact anchor phrasing (e.g. "Replacement Effects" not "replacement effect rules").
-- Only use free-form labels if no anchor fits — keep them 5 words or fewer.
-- Return a JSON array of strings, e.g. ["Triggered Abilities", "Layers"]
-- No preamble, no explanation, only the JSON array.`;
-
-    const oracleBlock = buildCardSummaryBlock(oracleData, { includeStats: false });
-
-    const userContent = `Here are the cards and their oracle texts:
-
-${oracleBlock}
-
-What specific interactions or ruling questions would players most likely need help with when playing these cards together? Return only a JSON array of 3-5 specific category labels.`;
-
-    const completion = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
-      system: [
-        {
-          type: "text",
-          text: categoryPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
-    });
-
-    const rawText =
-      completion.content && completion.content[0]
-        ? completion.content[0].text
-        : "";
-
-    let categories;
-    try {
-      const jsonText = normalizeClaudeJsonText(rawText);
-      categories = JSON.parse(jsonText);
-      if (!Array.isArray(categories)) {
-        throw new Error("Parsed categories is not an array");
-      }
-      categories = categories.map((c) =>
-        typeof c === "string" ? c.replace(/_/g, " ") : c,
-      );
-    } catch (parseErr) {
-      console.error("Failed to parse categories JSON from Claude:", {
-        rawText,
-        error: parseErr,
-      });
-      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
-    }
-
+    const categories = await generateCategories({ anthropic, cards });
     return res.json({ categories });
   } catch (err) {
+    if (err instanceof CategoryGenerationError) {
+      if (err.code === "INVALID_RESPONSE") {
+        console.error("Failed to parse categories JSON from Claude:", err.detail);
+      } else {
+        console.error("Category generation error:", err.code, err.detail);
+      }
+      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+    }
     console.error("Error in /categories handler:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
@@ -606,236 +162,43 @@ What specific interactions or ruling questions would players most likely need he
 app.post("/ruling", async (req, res) => {
   const { cards, situation, category, case_id } = req.body || {};
 
-  if (!Array.isArray(cards) || cards.length === 0) {
+  if (!isNonEmptyStringArray(cards)) {
     return res
       .status(400)
       .json({ error: "cards must be a non-empty string array" });
   }
 
   try {
-    const oracleData = await fetchAllCardOracle(cards);
-
-    const cardDataBlock = buildCardDataBlock(oracleData);
-    console.log("[/ruling] CARD DATA block length:", cardDataBlock.length);
-
-    const oracleBlock = buildCardSummaryBlock(oracleData, { includeStats: true });
-    const officialRulingsBlock = buildOfficialRulingsBlock(oracleData);
-
-    const cardOracleTexts = oracleData
-      .map((c) => (typeof c.oracle_text === "string" ? c.oracle_text.trim() : ""))
-      .filter(Boolean);
-
-    const voyQueryParts = [
-      ...cardOracleTexts,
-      situation?.trim() || "",
-      category?.trim() || "",
-    ].filter(Boolean);
-    const queryString = voyQueryParts.join("\n\n");
-
-    const embedResponse = await voyage.embed({
-      model: RAG_CONFIG.voyageModel,
-      inputType: "query",
-      input: [queryString],
-    });
-
-    const queryEmbedding = embedResponse.data?.[0]?.embedding;
-
-    if (!queryEmbedding) {
-      console.error("Voyage embedding missing or malformed:", embedResponse);
-      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
-    }
-
-    const { data: matches, error: supabaseError } = await supabase.rpc(
-      "match_rules",
-      {
-        query_embedding: queryEmbedding,
-        match_count: RAG_CONFIG.matchCount,
-      },
-    );
-
-    if (supabaseError) {
-      console.error("Supabase match_rules error:", supabaseError);
-      return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
-    }
-
-    const baseMatches = Array.isArray(matches) ? matches : [];
-    const { ragMatches, crChunks } = await retrieveRagContext({
+    const result = await generateRuling({
       supabase,
-      queryEmbedding,
+      voyage,
+      anthropic,
+      cards,
       situation,
-      cardOracleTexts,
-      baseMatches,
+      category,
+      case_id,
     });
 
-    const contextLines = [];
-
-    if (category && situation) {
-      contextLines.push(`FOCUS AREA: ${category}`);
-      contextLines.push("");
-      contextLines.push("GAME SITUATION:");
-      contextLines.push(situation);
-    } else if (category && !situation) {
-      contextLines.push(`FOCUS AREA: ${category}`);
-      contextLines.push("");
-      contextLines.push(
-        `INSTRUCTION: Analyse these cards and provide a ruling focused on '${category}'.`,
-      );
-    } else if (!category && situation) {
-      contextLines.push("GAME SITUATION:");
-      contextLines.push(situation);
-    } else {
-      contextLines.push(
-        "INSTRUCTION: Analyse these cards and identify ALL mechanically relevant interactions. Highlight non-obvious or commonly misplayed interactions.",
-      );
-    }
-
-    const contextSection = contextLines.join("\n");
-
-    const userPrompt = `${cardDataBlock}
-
-RELEVANT COMPREHENSIVE RULES (retrieved via RAG):
-${crChunks}
-
-OFFICIAL CARD RULINGS (from Scryfall):
-${officialRulingsBlock}
-
-${contextSection}`;
-
-    const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2048,
-      system: [
-        {
-          type: "text",
-          text: RULING_SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
+    await sendTelegramAlert({
+      cards: req.body.cards,
+      situation: req.body.situation,
+      ruling: result.ruling,
     });
 
-    const rawText =
-      completion.content && completion.content[0]
-        ? completion.content[0].text
-        : "";
-
-    const parsed = parseRulingResponse(rawText);
-    const missingFields = Object.entries(parsed)
-      .filter(([_, v]) => !v || v.length === 0)
-      .map(([k]) => k);
-    if (missingFields.length > 0) {
-      console.warn(
-        `[/ruling] Parser extracted empty sections: ${missingFields.join(", ")}. ` +
-          `Raw response length: ${rawText.length}. First 200 chars: ${rawText.slice(0, 200)}`,
-      );
-    }
-
-    const rulingMatch = parsed.ruling ? [null, parsed.ruling] : null;
-    const explanationMatch = parsed.explanation ? [null, parsed.explanation] : null;
-    const rulesMatch = parsed.rules_cited ? [null, parsed.rules_cited] : null;
-    const oracleRefMatch = parsed.card_oracle_text_referenced
-      ? [null, parsed.card_oracle_text_referenced]
-      : null;
-
-    const ruling = rulingMatch ? rulingMatch[1].trim() : "";
-    const explanation = explanationMatch ? explanationMatch[1].trim() : "";
-
-    let rules_cited = [];
-    if (rulesMatch) {
-      const rawRulesBlock = rulesMatch[1] || "";
-      const parsedRuleNumbers = Array.from(
-        new Set(
-          rawRulesBlock
-            .split(/[\n,;]+/)
-            .map((part) =>
-              part
-                .replace(/^[\s•\-*]+/, "")
-                .replace(/^rules?\s*cited\s*:\s*/i, "")
-                .trim(),
-            )
-            .filter(Boolean),
-        ),
-      );
-
-      if (parsedRuleNumbers.length > 0) {
-        const { data: exactRules, error: rulesLookupError } = await supabase
-          .from("comprehensive_rules")
-          .select("rule_number, rule_text")
-          .in("rule_number", parsedRuleNumbers);
-
-        if (rulesLookupError) {
-          console.error("Error looking up exact rules:", rulesLookupError);
-        }
-
-        const ruleMap = Object.fromEntries(
-          (exactRules ?? []).map((r) => [r.rule_number, r.rule_text]),
-        );
-
-        rules_cited = parsedRuleNumbers.map((num) => {
-          const text = ruleMap[num];
-          return text ? `${num}: ${text}` : num;
-        });
-
-        const unmatched = parsedRuleNumbers.filter((num) => !ruleMap[num]);
-        for (const num of unmatched) {
-          const { data: fuzzyRows, error: fuzzyError } = await supabase
-            .from("comprehensive_rules")
-            .select("rule_number, rule_text")
-            .like("rule_number", `${num}%`)
-            .limit(1);
-
-          if (fuzzyError) {
-            console.error("Error looking up fuzzy rule match:", {
-              rule_number: num,
-              error: fuzzyError,
-            });
-            continue;
-          }
-
-          if (fuzzyRows?.[0]) {
-            const row = fuzzyRows[0];
-            const idx = rules_cited.indexOf(num);
-            if (idx !== -1) {
-              rules_cited[idx] = `${row.rule_number}: ${row.rule_text}`;
-            }
-          }
-        }
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof RulingGenerationError) {
+      if (err.code === "EMBEDDING_FAILED") {
+        console.error("Voyage embedding missing or malformed:", err.detail);
+      } else if (err.code === "VECTOR_SEARCH_FAILED") {
+        console.error("Supabase match_rules error:", err.detail);
+      } else if (err.code === "INVALID_RESPONSE") {
+        console.error("Unexpected AI response format:", err.detail);
+      } else {
+        console.error("Ruling generation error:", err.code, err.detail);
       }
-    }
-
-    const oracle_referenced = oracleRefMatch
-      ? oracleRefMatch[1].trim()
-      : oracleBlock;
-
-    if (!ruling || !explanation) {
-      console.error("Unexpected AI response format:", rawText);
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
-
-    await sendTelegramAlert({ cards: req.body.cards, situation: req.body.situation, ruling });
-
-    if (case_id && ragMatches?.length) {
-      supabase
-        .from("cases")
-        .upsert({ case_id, rag_matches: ragMatches }, { onConflict: "case_id" })
-        .then(() => {})
-        .catch((err) => console.error("rag_matches upsert error:", err));
-    }
-
-    return res.json({
-      ruling,
-      explanation,
-      rules_cited: formatRulesCitedForClient(rules_cited),
-      oracle_referenced,
-      cr_version: CR_VERSION,
-      rag_matches: ragMatches,
-    });
-  } catch (err) {
     console.error("Error in /ruling handler:", err);
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
@@ -859,7 +222,7 @@ app.post("/log", async (req, res) => {
   if (typeof session_id !== "string" || session_id.trim().length === 0) {
     return res.status(400).json({ error: "session_id is required" });
   }
-  if (!Array.isArray(cards) || cards.length === 0) {
+  if (!isNonEmptyStringArray(cards)) {
     return res.status(400).json({ error: "cards must be a non-empty string array" });
   }
 
@@ -907,7 +270,7 @@ app.post("/share", async (req, res) => {
     rules_cited,
   } = req.body || {};
 
-  if (!Array.isArray(cards) || cards.length === 0) {
+  if (!isNonEmptyStringArray(cards)) {
     return res
       .status(400)
       .json({ error: "cards must be a non-empty string array" });
@@ -1116,7 +479,7 @@ app.post("/admin/golden-cases", async (req, res) => {
     notes,
   } = req.body || {};
 
-  if (!Array.isArray(cards) || cards.length === 0) {
+  if (!isNonEmptyStringArray(cards)) {
     return res
       .status(400)
       .json({ error: "cards must be a non-empty string array" });
