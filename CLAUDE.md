@@ -158,6 +158,11 @@ Images are never stored — only card names.
 - **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, rule_text_for_embedding, parent_rule_number, embedding (vector(1024)), cr_version (text); index on `parent_rule_number` for expansion queries
 - **cases** — usage logging (see Usage Logging above); includes ip_address (add via backend/sql/add_cases_ip_address.sql if missing)
 - **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, cr_version, created_at
+- **golden_test_cases** — cards, situation, category, interaction_type, difficulty, expected_verdict, required_rules, notes; manually populated, targeting 20–30 cases
+- **eval_runs** — tracks eval results across labeled runs (e.g. 'baseline', 'after-rag-tuning')
+
+## Supabase Environments
+- There are **separate dev and prod Supabase projects**. Always confirm which project you are targeting before running migrations or schema changes.
 
 ## Rate Limiting
 - 60 requests per hour per IP address
