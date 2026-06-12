@@ -1,0 +1,23 @@
+name: ManaJudge Reddit Daily
+
+on:
+  schedule:
+    - cron: "0 14 * * *"   # 9am ET (UTC-5) — adjust if needed
+  workflow_dispatch:        # allows manual trigger from GitHub Actions tab
+
+jobs:
+  reddit-daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run ManaJudge Reddit daily script
+        run: python scripts/reddit_daily.py

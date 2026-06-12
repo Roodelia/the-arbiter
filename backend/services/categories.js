@@ -39,7 +39,7 @@ function buildCategoryUserContent(oracleBlock) {
 
 ${oracleBlock}
 
-What specific interactions or ruling questions would players most likely need help with when playing these cards together? Return only a JSON array of 1-4 specific category labels.`;
+What specific interactions or ruling questions would players most likely need help with when playing these cards together? Return only a JSON array of 1-5 specific category labels.`;
 }
 
 async function generateCategories({ anthropic, cards }) {
