@@ -406,7 +406,12 @@ export default function Index() {
       await fetch(`${BACKEND_BASE_URL}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, case_id: caseId.current, ...data }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          case_id: caseId.current,
+          source: 'user',
+          ...data,
+        }),
       });
     } catch (e) {
       // Fail silently — logging should never block the user

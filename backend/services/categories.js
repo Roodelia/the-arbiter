@@ -21,7 +21,7 @@ const CATEGORIES_CONFIG = {
 
 function buildCategoryPrompt() {
   const anchorList = CATEGORY_ANCHORS.join(", ");
-  return `You are an expert Magic: The Gathering rules judge. Given the cards and situation, identify 1–4 interaction categories that best describe what rules are at play.
+  return `You are an expert Magic: The Gathering rules judge. Given the cards and situation, identify 1–5 interaction categories that best describe what rules are at play.
 
 ANCHOR LIST:
 ${anchorList}

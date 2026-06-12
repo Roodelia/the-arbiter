@@ -217,6 +217,7 @@ app.post("/log", async (req, res) => {
     rules_cited,
     flagged,
     flag_reason,
+    source,
   } = req.body || {};
 
   if (typeof session_id !== "string" || session_id.trim().length === 0) {
@@ -240,6 +241,7 @@ app.post("/log", async (req, res) => {
       // rag_matches is server-owned and written exclusively by /ruling.
       ...(flagged !== undefined && { flagged }),
       ...(flag_reason !== undefined && { flag_reason }),
+      ...(source !== undefined && { source }),
     };
 
     const { data, error } = await supabase
