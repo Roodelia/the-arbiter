@@ -1,10 +1,15 @@
+const SCRYFALL_HEADERS = {
+  "User-Agent": "ManaJudge/1.0 (https://manajudge.com)",
+  Accept: "application/json",
+};
+
 async function fetchCardOracle(cardName) {
   const url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(
     cardName,
   )}`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: SCRYFALL_HEADERS });
     if (!res.ok) {
       throw new Error(`Scryfall error for "${cardName}": ${res.statusText}`);
     }
@@ -18,6 +23,7 @@ async function fetchCardOracle(cardName) {
       if (cardId) {
         const rulingsRes = await fetch(
           `https://api.scryfall.com/cards/${cardId}/rulings`,
+          { headers: SCRYFALL_HEADERS },
         );
         if (rulingsRes.ok) {
           const rulings_data = await rulingsRes.json();
