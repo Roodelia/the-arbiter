@@ -1,4 +1,5 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE } from '@/constants/theme';
+import { adminFetch } from '@/utils/adminAuth';
 import { type Href, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -172,7 +173,7 @@ export default function GoldenCaseNewScreen() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/admin/golden-cases`, {
+      const res = await adminFetch('/admin/golden-cases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

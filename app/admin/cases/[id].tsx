@@ -1,5 +1,6 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
 import { fetchCardImageUri } from '@/utils/scryfall';
+import { adminFetch } from '@/utils/adminAuth';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -156,8 +157,8 @@ export default function UsageCaseDetailScreen() {
       setRow(null);
 
       try {
-        const res = await fetch(
-          `${BACKEND_BASE_URL}/admin/cases/${encodeURIComponent(caseId)}`,
+        const res = await adminFetch(
+          `/admin/cases/${encodeURIComponent(caseId)}`,
         );
         if (res.status === 404) {
           if (!cancelled) setNotFound(true);

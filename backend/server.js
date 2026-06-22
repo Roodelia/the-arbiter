@@ -21,6 +21,11 @@ const {
   SHARE_APP_BASE,
 } = require("./config/app");
 const { isNonEmptyStringArray } = require("./utils/validators");
+const {
+  getAdminSecret,
+  verifyAdminPassword,
+  requireAdmin,
+} = require("./middleware/adminAuth");
 
 async function sendTelegramAlert({ cards, situation, ruling }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -429,6 +434,22 @@ app.get("/share/:id", async (req, res) => {
     return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
   }
 });
+
+app.post("/admin/login", (req, res) => {
+  const secret = getAdminSecret();
+  if (!secret) {
+    return res.status(503).json({ error: "Admin not configured" });
+  }
+
+  const { password } = req.body || {};
+  if (!verifyAdminPassword(password)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  return res.json({ token: secret });
+});
+
+app.use("/admin", requireAdmin);
 
 app.get("/admin/cases", async (_req, res) => {
   try {

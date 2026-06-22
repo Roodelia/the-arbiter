@@ -1,4 +1,5 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
+import { adminFetch } from '@/utils/adminAuth';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -54,7 +55,7 @@ export default function GoldenCasesListScreen() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_BASE_URL}/admin/golden-cases`, {
+      const res = await adminFetch('/admin/golden-cases', {
         signal,
       });
       if (!res.ok) throw new Error('fetch failed');
