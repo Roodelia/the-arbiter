@@ -1,4 +1,5 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
+import { ExplanationBullets } from '@/components/ExplanationBullets';
 import { fetchCardImageUri } from '@/utils/scryfall';
 import { adminFetch } from '@/utils/adminAuth';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
@@ -346,7 +347,7 @@ export default function GoldenCaseDetailScreen() {
               {row.notes?.trim() ? (
                 <View style={styles.situationBlock}>
                   <Text style={[styles.sectionLabel, { marginTop: 6 }]}>NOTES</Text>
-                  <Text style={styles.situationText}>{row.notes.trim()}</Text>
+                  <ExplanationBullets text={row.notes.trim()} />
                 </View>
               ) : null}
             </View>

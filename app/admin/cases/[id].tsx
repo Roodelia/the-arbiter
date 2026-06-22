@@ -1,4 +1,5 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
+import { ExplanationBullets } from '@/components/ExplanationBullets';
 import { fetchCardImageUri } from '@/utils/scryfall';
 import { adminFetch } from '@/utils/adminAuth';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
@@ -369,7 +370,7 @@ export default function UsageCaseDetailScreen() {
                 <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 6 }]}>
                   EXPLANATION
                 </Text>
-                <Text style={styles.situationText}>{row.explanation.trim()}</Text>
+                <ExplanationBullets text={row.explanation.trim()} />
               </View>
             ) : null}
 
