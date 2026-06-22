@@ -430,6 +430,46 @@ app.get("/share/:id", async (req, res) => {
   }
 });
 
+app.get("/admin/cases", async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("cases")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    return res.json({ cases: Array.isArray(data) ? data : [] });
+  } catch (err) {
+    console.error("Error in GET /admin/cases:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
+app.get("/admin/cases/:id", async (req, res) => {
+  const id = req.params.id;
+  if (typeof id !== "string" || !id.trim()) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("cases")
+      .select("*")
+      .eq("id", id.trim())
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    return res.json({ case: data });
+  } catch (err) {
+    console.error("Error in GET /admin/cases/:id:", err);
+    return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
+  }
+});
+
 app.get("/admin/golden-cases", async (_req, res) => {
   try {
     const { data, error } = await supabase

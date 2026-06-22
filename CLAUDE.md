@@ -40,7 +40,7 @@ Express uses `trust proxy` (one hop) so `req.ip` and rate limiting align with th
 POST /categories
   - Input: { cards: string[] }
   - Fetches Scryfall oracle text + official WotC rulings per card
-  - Calls Claude Haiku with a curated `CATEGORY_ANCHORS` list; model must pick from anchors when one fits (1–4 labels, free-form only if no anchor fits)
+  - Calls Claude Haiku with a curated `CATEGORY_ANCHORS` list; model must pick from anchors when one fits (1–5 labels, free-form only if no anchor fits)
   - Returns: { categories: string[] }
 
 POST /ruling
@@ -61,15 +61,18 @@ POST /ruling
 POST /log
   - Input: { session_id, case_id, cards, selected_category?,
              situation?, ruling?, explanation?, rules_cited?,
-             cr_version?, rag_matches?,
-             flagged?, flag_reason? }
+             flagged?, flag_reason?, source? }
   - Upserts case record to Supabase cases table by case_id; sets ip_address
     from X-Forwarded-For (first hop) or req.ip (trust proxy enabled for Railway)
+  - Sets cr_version from the server CR_VERSION env (not client-supplied)
+  - rag_matches is server-owned — written exclusively by /ruling, never accepted here
+  - source ('user' | 'agent') marks who created the case; the app sends 'user' on every logCase
   - Returns: { success: true, id } (id = cases row id)
 
 POST /share
-  - Input: { case_id?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited, cr_version? }
+  - Input: { case_id?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited }
   - Generates short 8-char alphanumeric ID
+  - cr_version is set from the server CR_VERSION env (not client-supplied)
   - Inserts into Supabase shared_rulings table
   - Returns: { success: true, id, url }
 
@@ -83,6 +86,16 @@ GET /share/:id
   - Looks up shared ruling by ID from shared_rulings table
   - Returns: { id, cards, category, situation, ruling, explanation, rules_cited, cr_version, created_at }
   - 404 if not found
+
+### Admin Endpoints (golden_test_cases — used by app/admin/golden_cases)
+GET /admin/golden-cases
+  - Returns: { cases: [...] } ordered by created_at descending
+GET /admin/golden-cases/:id
+  - Returns: { case } or 404 if not found
+POST /admin/golden-cases
+  - Input: { cards, interaction_type, difficulty, expected_verdict, situation?, category?, required_rules?, notes? }
+  - Inserts a golden test case; Returns: { success: true, id }
+  - Note: not currently behind auth or rate limiting
 
 ## Scryfall Integration
 - Two calls per card: /cards/named?fuzzy= (oracle text) + /cards/{id}/rulings
@@ -152,12 +165,13 @@ Each case uses a UUID case_id (upserted, not inserted) so partial
 sessions appear as one row with null fields for incomplete steps.
 session_id groups multiple cases from the same app session.
 ip_address (text, nullable) stores the client IP for each upsert.
+source (text, nullable: 'user' | 'agent') marks the case origin; the app sends 'user' on every logCase.
 Images are never stored — only card names.
 
 ## Database (Supabase)
 - **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, rule_text_for_embedding, parent_rule_number, embedding (vector(1024)), cr_version (text); index on `parent_rule_number` for expansion queries
-- **cases** — usage logging (see Usage Logging above); includes ip_address (add via backend/sql/add_cases_ip_address.sql if missing)
-- **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, cr_version, created_at
+- **cases** — usage logging (see Usage Logging above); includes ip_address (text, nullable) and source (text, nullable: 'user' | 'agent')
+- **shared_rulings** — id (text PK), case_id (FK to cases), cards, category, situation, ruling, explanation, rules_cited, cr_version, featured (boolean — surfaced by GET /share/featured), created_at
 - **golden_test_cases** — cards, situation, category, interaction_type, difficulty, expected_verdict, required_rules, notes; manually populated, targeting 20–30 cases
 - **eval_runs** — tracks eval results across labeled runs (e.g. 'baseline', 'after-rag-tuning')
 
@@ -212,17 +226,22 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - app/ruling/[id].tsx — shared ruling public page
 - app/+html.tsx — web HTML wrapper (viewport, overscroll, analytics)
 - app/_layout.tsx — Expo Router layout (headerShown: false)
-- backend/server.js — Express backend (all API endpoints)
-- backend/config/rag.js — RAG tunables (match count, expansion limits, context cap)
+- backend/server.js — Express backend (route handlers, rate limiting, Telegram, share/log/admin)
+- backend/config/app.js — shared backend constants (CR_VERSION, generic error message, share base URL)
+- backend/config/rag.js — RAG tunables (match count, expansion limits, context cap, EXPANSION_BLOCKLIST)
+- backend/config/ruling.js — ruling model + token limits
 - backend/services/rag.js — RAG retrieval pipeline (anchors, expansion, cap)
 - backend/services/ruling.js — /ruling orchestration (Scryfall → RAG → Claude → citations)
+- backend/services/categories.js — /categories orchestration (Scryfall → Haiku → JSON parse)
 - backend/services/scryfall.js — Scryfall fetch + card prompt blocks
 - backend/services/ruling-parse.js — Claude ruling response section parser
 - backend/services/rules-cited.js — CR citation resolution for API responses
 - backend/prompts/ruling-system.js — Sonnet system prompt for /ruling
-- backend/config/ruling.js — ruling model + token limits
 - backend/data/category-anchors.js — curated labels for /categories Haiku chips
 - backend/data/retrieval-anchors.js — pattern-based CR rule injection for /ruling
+- backend/utils/claude.js — Claude message text extraction + JSON normalization helpers
+- backend/utils/validators.js — request validation helpers (e.g. isNonEmptyStringArray)
+- backend/tests/*.test.js — node:test unit tests for RAG + ruling helpers (run via `npm test`)
 - constants/theme.ts — shared colours/fonts/error constant (COLOURS object, TITLE_FONT, BODY_FONT, GENERIC_ERROR_MESSAGE)
 - utils/scryfall.ts — shared `fetchCardImageUri` helper
 - scripts/embed_rules.py — CR download, chunk (`rule_text` for display, `rule_text_for_embedding` for Voyage), embed, upload (stores cr_version per row)
