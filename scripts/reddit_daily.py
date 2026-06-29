@@ -175,12 +175,11 @@ def get_categories(cards):
     return post_json(f"{BACKEND}/categories", {"cards": cards})
 
 
-def get_ruling(cards, situation, category, case_id):
+def get_ruling(cards, situation, category):
     return post_json(f"{BACKEND}/ruling", {
         "cards": cards,
         "situation": situation,
         "category": category,
-        "case_id": case_id,
     })
 
 
@@ -216,12 +215,12 @@ def process_post(session_id, title, situation, cards, url=""):
         print(f"  Categories failed ({e}), continuing without")
         category = ""
 
-    case_id = str(uuid.uuid4())
-
     print("  Getting ruling...")
-    ruling_resp = get_ruling(cards, situation, category, case_id)
+    ruling_resp = get_ruling(cards, situation, category)
     ruling_text = ruling_resp.get("ruling", "")
     print(f"  Ruling: {ruling_text[:120]}")
+
+    case_id = ruling_resp.get("case_id") or str(uuid.uuid4())
 
     print("  Logging to Supabase...")
     log_case(cards, situation, category, ruling_resp, case_id, session_id)

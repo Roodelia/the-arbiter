@@ -165,7 +165,7 @@ app.post("/categories", async (req, res) => {
 });
 
 app.post("/ruling", async (req, res) => {
-  const { cards, situation, category, case_id } = req.body || {};
+  const { cards, situation, category } = req.body || {};
 
   if (!isNonEmptyStringArray(cards)) {
     return res
@@ -181,7 +181,6 @@ app.post("/ruling", async (req, res) => {
       cards,
       situation,
       category,
-      case_id,
     });
 
     sendTelegramAlert({

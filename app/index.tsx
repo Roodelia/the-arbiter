@@ -128,6 +128,7 @@ type RagMatchLog = {
 };
 
 type RulingResponse = {
+  case_id?: string;
   ruling: string;
   explanation: string;
   rules_cited: string[];
@@ -605,12 +606,10 @@ export default function Index() {
     try {
     const payload: {
       cards: string[];
-      case_id: string;
       situation?: string;
       category?: string;
     } = {
       cards: selectedCards.map((c) => c.name),
-      case_id: caseId.current,
       ...(categoryPayload ? { category: categoryPayload } : {}),
       ...(situation.trim() ? { situation: situation.trim() } : {}),
     };
@@ -628,6 +627,10 @@ export default function Index() {
       }
       if (!res.ok) throw new Error('Failed to fetch ruling');
       const json = (await res.json()) as RulingResponse;
+
+      if (typeof json.case_id === 'string' && json.case_id.trim()) {
+        caseId.current = json.case_id.trim();
+      }
 
       void logCase({
         cards: selectedCards.map((c) => c.name),
@@ -796,6 +799,11 @@ export default function Index() {
       }
       if (!res.ok) throw new Error('Failed to refine ruling');
       const json = (await res.json()) as RulingResponse;
+
+      if (typeof json.case_id === 'string' && json.case_id.trim()) {
+        caseId.current = json.case_id.trim();
+      }
+
       if (shareCopiedTimerRef.current) {
         clearTimeout(shareCopiedTimerRef.current);
         shareCopiedTimerRef.current = null;

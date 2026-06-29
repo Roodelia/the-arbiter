@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { RAG_CONFIG } = require("../config/rag");
 const { RULING_CONFIG } = require("../config/ruling");
 const { CR_VERSION } = require("../config/app");
@@ -149,8 +150,8 @@ async function generateRuling({
   cards,
   situation,
   category,
-  case_id,
 }) {
+  const case_id = crypto.randomUUID();
   const oracleData = await fetchAllCardOracle(cards);
 
   const cardDataBlock = buildCardDataBlock(oracleData);
@@ -206,6 +207,7 @@ async function generateRuling({
   await persistRagMatches(supabase, case_id, ragMatches);
 
   return {
+    case_id,
     ruling,
     explanation,
     rules_cited: formatRulesCitedForClient(rules_cited),
