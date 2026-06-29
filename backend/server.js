@@ -184,7 +184,7 @@ app.post("/ruling", async (req, res) => {
       case_id,
     });
 
-    await sendTelegramAlert({
+    sendTelegramAlert({
       cards: req.body.cards,
       situation: req.body.situation,
       ruling: result.ruling,
