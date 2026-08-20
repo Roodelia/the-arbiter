@@ -1,5 +1,7 @@
+import { BuyMeACoffeeButton } from '@/components/BuyMeACoffeeButton';
+import { BuyMeACoffeeWidget } from '@/components/BuyMeACoffeeWidget';
+import { ConsentBanner } from '@/components/ConsentBanner';
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
-import { fetchCardImageUri } from '@/utils/scryfall';
 import {
   getAnalyticsDistinctId,
   getStoredConsent,
@@ -8,8 +10,7 @@ import {
   setStoredConsent,
   track,
 } from '@/utils/analytics';
-import { ConsentBanner } from '@/components/ConsentBanner';
-import { BuyMeACoffeeButton } from '@/components/BuyMeACoffeeButton';
+import { fetchCardImageUri } from '@/utils/scryfall';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1231,6 +1232,8 @@ export default function Index() {
 
       {step === 3 ? (
         <>
+          <BuyMeACoffeeWidget />
+
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           {rulingResult ? (
@@ -1708,8 +1711,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   step1FeaturedSection: {
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 0,
+    paddingBottom: 0,
   },
   step1SupportSection: {
     marginBottom: 12,
