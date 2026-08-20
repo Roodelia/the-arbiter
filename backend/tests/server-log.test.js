@@ -13,16 +13,19 @@ const { GENERIC_SERVER_ERROR_MESSAGE } = require("../config/app");
 const { createFakeSupabase } = require("./helpers/fakeSupabase");
 
 const fakeSupabase = createFakeSupabase();
+const trackCalls = [];
 const app = createApp({
   anthropic: {},
   voyage: {},
   supabase: fakeSupabase,
+  trackEvent: (...args) => trackCalls.push(args),
 });
 
-// fakeSupabase.calls accumulates across the whole file; reset it before
-// each test so call-count/arg assertions only see that test's own requests.
+// fakeSupabase.calls/trackCalls accumulate across the whole file; reset
+// before each test so call-count/arg assertions only see that test's requests.
 beforeEach(() => {
   fakeSupabase.calls.length = 0;
+  trackCalls.length = 0;
 });
 
 test("POST /log - 400 when session_id is missing", async () => {
@@ -159,6 +162,86 @@ test("POST /log - client-supplied cr_version and rag_matches are ignored", async
   const [row] = upsertCall.args;
   assert.strictEqual(row.cr_version, "test-cr-1.0");
   assert.strictEqual(row.rag_matches, undefined);
+});
+
+test("POST /log - tracks ask_manajudge when source_event matches, forwarding session_id/consent", async () => {
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: { id: 42 }, error: null },
+  ]);
+
+  await request(app).post("/log").send({
+    session_id: "sess-1",
+    case_id: "case-1",
+    cards: ["Lightning Bolt", "Fog"],
+    source_event: "ask_manajudge",
+    analytics_consent: true,
+  });
+
+  assert.strictEqual(trackCalls.length, 1);
+  const [eventName, distinctId, properties, consent] = trackCalls[0];
+  assert.strictEqual(eventName, "ask_manajudge");
+  assert.strictEqual(distinctId, "sess-1");
+  assert.strictEqual(properties.card_count, 2);
+  assert.strictEqual(consent, true);
+});
+
+test("POST /log - does not track when source_event is absent or unrecognised", async () => {
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: { id: 42 }, error: null },
+  ]);
+
+  await request(app).post("/log").send({
+    session_id: "sess-1",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+  });
+  await request(app).post("/log").send({
+    session_id: "sess-1",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+    source_event: "something_else",
+  });
+
+  assert.strictEqual(trackCalls.length, 0);
+});
+
+test("POST /log - does not track ask_manajudge on a 403 (rejected case_id ownership)", async () => {
+  fakeSupabase.setResult("cases", { data: { session_id: "sess-victim" }, error: null });
+
+  const res = await request(app).post("/log").send({
+    session_id: "sess-attacker",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+    source_event: "ask_manajudge",
+    analytics_consent: true,
+  });
+
+  assert.strictEqual(res.status, 403);
+  assert.strictEqual(trackCalls.length, 0);
+});
+
+test("POST /log - source_event and analytics_consent are never written to the cases row", async () => {
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: { id: 42 }, error: null },
+  ]);
+
+  await request(app).post("/log").send({
+    session_id: "sess-1",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+    source_event: "ask_manajudge",
+    analytics_consent: true,
+  });
+
+  const upsertCall = fakeSupabase.calls.find(
+    (c) => c.table === "cases" && c.method === "upsert",
+  );
+  const [row] = upsertCall.args;
+  assert.strictEqual(row.source_event, undefined);
+  assert.strictEqual(row.analytics_consent, undefined);
 });
 
 test("POST /log - 500 with generic message when the ownership lookup errors", async () => {

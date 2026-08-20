@@ -272,6 +272,8 @@ function createApp({
       flagged,
       flag_reason,
       source,
+      source_event,
+      analytics_consent,
     } = req.body || {};
 
     if (typeof session_id !== "string" || session_id.trim().length === 0) {
@@ -294,6 +296,21 @@ function createApp({
         return res
           .status(403)
           .json({ error: "case_id does not belong to this session" });
+      }
+
+      // source_event is a tracking-only marker (not a cases column) identifying
+      // which UI action triggered this /log call, so it can be tied to a
+      // Mixpanel event server-side — piggybacking on this call rather than a
+      // dedicated endpoint, since it already fires unconditionally on that tap.
+      // Fired only once ownership is confirmed, so a rejected/attacker request
+      // never counts as a genuine "Ask ManaJudge" tap.
+      if (source_event === "ask_manajudge") {
+        trackEvent(
+          "ask_manajudge",
+          session_id,
+          { card_count: cards.length },
+          analytics_consent,
+        );
       }
 
       const otherFields = {

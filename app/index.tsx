@@ -445,6 +445,7 @@ export default function Index() {
           session_id: sessionId,
           case_id: caseId.current,
           source: 'user',
+          analytics_consent: hasAnalyticsConsent(),
           ...data,
         }),
       });
@@ -492,6 +493,7 @@ export default function Index() {
   const addCard = useCallback(
     (cardName: string) => {
       setErrorMessage(null);
+      track('cards_selected', { card_name: cardName, platform: Platform.OS });
 
       const normalized = cardName.trim().toLowerCase();
 
@@ -1066,10 +1068,9 @@ export default function Index() {
           <View style={[styles.section, styles.step1ActionSection, styles.actionButtonWrapper]}>
             <Pressable
               onPress={() => {
-                void logCase({ cards: selectedCards.map((c) => c.name) });
-                track('cards_selected', {
-                  card_count: selectedCards.length,
-                  platform: Platform.OS,
+                void logCase({
+                  cards: selectedCards.map((c) => c.name),
+                  source_event: 'ask_manajudge',
                 });
                 goToStep2();
               }}
