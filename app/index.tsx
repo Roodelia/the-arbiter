@@ -1,5 +1,13 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
 import { fetchCardImageUri } from '@/utils/scryfall';
+import {
+  getStoredConsent,
+  hasAnalyticsConsent,
+  initAnalytics,
+  setStoredConsent,
+  track,
+} from '@/utils/analytics';
+import { ConsentBanner } from '@/components/ConsentBanner';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -277,6 +285,7 @@ export default function Index() {
     });
   };
   const caseId = useRef(generateId());
+  const [showConsentBanner, setShowConsentBanner] = useState(false);
   const { width } = useWindowDimensions();
   const cardWidth = Platform.OS === 'web' ? Math.min(width - 32, 400) : width - 32;
 
@@ -353,6 +362,28 @@ export default function Index() {
         clearTimeout(shareCopiedTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const consent = getStoredConsent();
+    if (consent === null) {
+      setShowConsentBanner(true);
+    } else if (consent === true) {
+      initAnalytics(sessionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onAcceptAnalyticsConsent = useCallback(() => {
+    setStoredConsent(true);
+    initAnalytics(sessionId);
+    setShowConsentBanner(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onDeclineAnalyticsConsent = useCallback(() => {
+    setStoredConsent(false);
+    setShowConsentBanner(false);
   }, []);
 
   useEffect(() => {
@@ -611,12 +642,14 @@ export default function Index() {
       cards: string[];
       case_id: string;
       session_id: string;
+      analytics_consent: boolean;
       situation?: string;
       category?: string;
     } = {
       cards: selectedCards.map((c) => c.name),
       case_id: caseId.current,
       session_id: sessionId,
+      analytics_consent: hasAnalyticsConsent(),
       ...(categoryPayload ? { category: categoryPayload } : {}),
       ...(situation.trim() ? { situation: situation.trim() } : {}),
     };
@@ -685,6 +718,8 @@ export default function Index() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: caseId.current,
+          session_id: sessionId,
+          analytics_consent: hasAnalyticsConsent(),
           cards: selectedCards.map((c) => c.name),
           ...(selectedCategory.length > 0
             ? { category: selectedCategory }
@@ -737,6 +772,7 @@ export default function Index() {
       const categoryPayload = selectedCategoriesPayload(selectedCategory);
       setFlagged(true);
       setFlagModalVisible(true);
+      track('ruling_flagged', {});
       void logCase({
         cards: selectedCards.map((c) => c.name),
         selected_category: categoryPayload,
@@ -1031,6 +1067,10 @@ export default function Index() {
             <Pressable
               onPress={() => {
                 void logCase({ cards: selectedCards.map((c) => c.name) });
+                track('cards_selected', {
+                  card_count: selectedCards.length,
+                  platform: Platform.OS,
+                });
                 goToStep2();
               }}
               disabled={!canGoToStep2}
@@ -1540,6 +1580,12 @@ export default function Index() {
         </View>
       </Modal>
       </ScrollView>
+      {showConsentBanner ? (
+        <ConsentBanner
+          onAccept={onAcceptAnalyticsConsent}
+          onDecline={onDeclineAnalyticsConsent}
+        />
+      ) : null}
     </View>
   );
 }

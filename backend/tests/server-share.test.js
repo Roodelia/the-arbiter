@@ -11,16 +11,19 @@ const { GENERIC_SERVER_ERROR_MESSAGE } = require("../config/app");
 const { createFakeSupabase } = require("./helpers/fakeSupabase");
 
 const fakeSupabase = createFakeSupabase();
+const trackCalls = [];
 const app = createApp({
   anthropic: {},
   voyage: {},
   supabase: fakeSupabase,
+  trackEvent: (...args) => trackCalls.push(args),
 });
 
-// fakeSupabase.calls accumulates across the whole file; reset it before
-// each test so call-count assertions only see that test's own requests.
+// fakeSupabase.calls/trackCalls accumulate across the whole file; reset
+// before each test so call-count assertions only see that test's requests.
 beforeEach(() => {
   fakeSupabase.calls.length = 0;
+  trackCalls.length = 0;
 });
 
 const validBody = {
@@ -100,6 +103,36 @@ test("POST /share - 200 inserts a row and returns the share url", async () => {
   const [row] = insertCall.args;
   assert.strictEqual(row.cr_version, "test-cr-1.0");
   assert.strictEqual(row.category, JSON.stringify(["Direct Damage", "Timing"]));
+});
+
+test("POST /share - tracks ruling_shared with session_id/consent on success", async () => {
+  fakeSupabase.setResult("shared_rulings", { data: null, error: null });
+
+  await request(app).post("/share").send({
+    ...validBody,
+    cards: ["Lightning Bolt", "Fog"],
+    session_id: "sess-1",
+    analytics_consent: true,
+  });
+
+  assert.strictEqual(trackCalls.length, 1);
+  const [eventName, distinctId, properties, consent] = trackCalls[0];
+  assert.strictEqual(eventName, "ruling_shared");
+  assert.strictEqual(distinctId, "sess-1");
+  assert.strictEqual(properties.card_count, 2);
+  assert.strictEqual(consent, true);
+});
+
+test("POST /share - does not track when the insert fails", async () => {
+  fakeSupabase.setResult("shared_rulings", { data: null, error: { code: "OTHER", message: "db down" } });
+
+  await request(app).post("/share").send({
+    ...validBody,
+    session_id: "sess-1",
+    analytics_consent: true,
+  });
+
+  assert.strictEqual(trackCalls.length, 0);
 });
 
 test("POST /share - retries on a unique-id collision (23505) and succeeds", async () => {

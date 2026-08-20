@@ -22,6 +22,7 @@ const {
 } = require("./config/app");
 const { isNonEmptyStringArray } = require("./utils/validators");
 const { lookupCaseOwner, isOwnedBySession } = require("./services/caseOwnership");
+const { trackEvent: defaultTrackEvent } = require("./services/mixpanel");
 const {
   getAdminSecret,
   verifyAdminPassword,
@@ -94,6 +95,7 @@ function createApp({
   generateRuling = defaultGenerateRuling,
   generateCategories = defaultGenerateCategories,
   sendTelegramAlert = defaultSendTelegramAlert,
+  trackEvent = defaultTrackEvent,
 } = {}) {
   const app = express();
   // So req.ip and rate-limit use X-Forwarded-For when behind Railway / reverse proxies
@@ -167,13 +169,31 @@ function createApp({
   });
 
   app.post("/ruling", async (req, res) => {
-    const { cards, situation, category, case_id, session_id } = req.body || {};
+    const {
+      cards,
+      situation,
+      category,
+      case_id,
+      session_id,
+      analytics_consent,
+    } = req.body || {};
 
     if (!isNonEmptyStringArray(cards)) {
       return res
         .status(400)
         .json({ error: "cards must be a non-empty string array" });
     }
+
+    trackEvent(
+      "verdict_requested",
+      session_id,
+      {
+        card_count: cards.length,
+        has_situation: Boolean(situation && situation.trim()),
+        category: category || undefined,
+      },
+      analytics_consent,
+    );
 
     try {
       const result = await generateRuling({
@@ -193,6 +213,20 @@ function createApp({
         ruling: result.ruling,
       });
 
+      trackEvent(
+        "ruling_completed",
+        session_id,
+        {
+          card_count: cards.length,
+          has_situation: Boolean(situation && situation.trim()),
+          category: category || undefined,
+          rules_cited_count: result.rules_cited?.length ?? 0,
+          rag_match_count: result.rag_matches?.length ?? 0,
+          cr_version: result.cr_version,
+        },
+        analytics_consent,
+      );
+
       return res.json(result);
     } catch (err) {
       if (err instanceof RulingGenerationError) {
@@ -205,9 +239,21 @@ function createApp({
         } else {
           console.error("Ruling generation error:", err.code, err.detail);
         }
+        trackEvent(
+          "ruling_failed",
+          session_id,
+          { error_code: err.code },
+          analytics_consent,
+        );
         return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
       }
       console.error("Error in /ruling handler:", err);
+      trackEvent(
+        "ruling_failed",
+        session_id,
+        { error_code: "UNKNOWN" },
+        analytics_consent,
+      );
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
   });
@@ -286,6 +332,8 @@ function createApp({
   app.post("/share", async (req, res) => {
     const {
       case_id,
+      session_id,
+      analytics_consent,
       cards,
       category,
       situation,
@@ -388,6 +436,12 @@ function createApp({
         const { error } = await supabase.from("shared_rulings").insert(row);
 
         if (!error) {
+          trackEvent(
+            "ruling_shared",
+            session_id,
+            { card_count: cards.length },
+            analytics_consent,
+          );
           return res.json({
             success: true,
             id: shareId,

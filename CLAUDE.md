@@ -24,7 +24,7 @@ Casual MTG players who encounter rules disputes during games.
 - Vector DB: Supabase pgvector (comprehensive_rules table)
 - CR indexing: scripts/embed_rules.py chunks by rule number; stores `rule_text` (display, with section/rule prefixes) and `rule_text_for_embedding` (clean text for Voyage). Each chunk has `parent_rule_number` (null for base rules like `702.15`, set for lettered subrules like `702.15a -> 702.15`). Re-run when Wizards publishes a new CR file.
 - Card data: Scryfall API (free, no auth, fuzzy name search + rulings endpoint)
-- Analytics: Vercel Analytics
+- Analytics: Vercel Analytics (page views/web vitals); Mixpanel (product event tracking — see Analytics (Mixpanel) below)
 
 ## Hosting
 - Frontend: Vercel (https://manajudge.com)
@@ -44,7 +44,7 @@ POST /categories
   - Returns: { categories: string[] }
 
 POST /ruling
-  - Input: { cards: string[], case_id?: string, session_id?: string, situation?: string, category?: string }
+  - Input: { cards: string[], case_id?: string, session_id?: string, situation?: string, category?: string, analytics_consent?: boolean }
   - **case_id ownership**: a client-supplied `case_id` is only honoured if no `cases` row exists for it yet, or the existing row's `session_id` matches the request's `session_id`; otherwise the server mints a fresh UUID instead (`resolveCaseId` in services/ruling.js) — prevents a caller from overwriting another session's `rag_matches` via a guessed/reused `case_id`. Always returns the resolved `case_id` in the response so the client stays in sync.
   - Fetches Scryfall oracle text + official WotC rulings per card
   - Builds Voyage query from card oracle texts + situation + category; embeds with voyage-3.5 (`inputType: "query"`)
@@ -56,6 +56,8 @@ POST /ruling
   - Parses model output (`parseRulingResponse`); resolves `RULES CITED` rule numbers to full CR text from Supabase (exact match, then fuzzy prefix)
   - Fire-and-forget upsert of `rag_matches` to `cases` table under the resolved `case_id`
   - Sends Telegram alert on successful ruling (if configured)
+  - Tracks Mixpanel `verdict_requested` (before generation) then `ruling_completed` or `ruling_failed`
+    (distinct_id = session_id; see Analytics (Mixpanel) below) — no-ops unless `analytics_consent: true`
   - Returns: { ruling, explanation, rules_cited, oracle_referenced, cr_version, rag_matches }
   - `rag_matches`: { rule_number, similarity, expanded, anchored, anchor_label? } per rule sent to the model
 
@@ -76,10 +78,11 @@ POST /log
   - Returns: { success: true, id } (id = cases row id)
 
 POST /share
-  - Input: { case_id?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited }
+  - Input: { case_id?, session_id?, analytics_consent?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited }
   - Generates short 8-char alphanumeric ID
   - cr_version is set from the server CR_VERSION env (not client-supplied)
   - Inserts into Supabase shared_rulings table
+  - Tracks Mixpanel `ruling_shared` on success (distinct_id = session_id) — no-ops unless `analytics_consent: true`
   - Returns: { success: true, id, url }
 
 GET /share/featured
@@ -174,6 +177,39 @@ ip_address (text, nullable) stores the client IP for each upsert.
 source (text, nullable: 'user' | 'agent') marks the case origin; the app sends 'user' on every logCase.
 Images are never stored — only card names.
 
+## Analytics (Mixpanel)
+Product event tracking, separate from the Supabase `cases` usage log above (that's the system of
+record for every case; Mixpanel is for aggregate product analytics — funnel drop-off, share/flag
+rate, volume). No user accounts exist in this app, so there is no login-based identity: **distinct_id
+= session_id** on both client and server, set once via `mixpanel.identify(sessionId)` client-side
+and passed explicitly as `distinct_id` on every server-side `.track()` call — never reset, since a
+session's `session_id` never changes.
+
+**Consent-gated (EU/CA users in scope):** a banner (`components/ConsentBanner.tsx`, shown when
+`utils/analytics.ts`'s `getStoredConsent()` returns `null`) gates tracking entirely — nothing fires,
+client or server, until the user accepts. Choice persists in `localStorage`
+(`manajudge_analytics_consent`). Client sends `analytics_consent: hasAnalyticsConsent()` on every
+`/ruling` and `/share` call; the backend's `trackEvent` (`backend/services/mixpanel.js`) no-ops
+unless that flag is exactly `true`, regardless of whether a token is configured.
+
+**Web-only today:** uses `mixpanel-browser` (DOM-based) client-side, matching the fact that only the
+web build ships (see Hosting). Native iOS/Android tracking would need `mixpanel-react-native` plus a
+dev-client build, neither of which exist yet.
+
+**Events:**
+| Event | Fires from | Trigger |
+|---|---|---|
+| `cards_selected` | Client | "Ask ManaJudge" tap, Step 1→2 |
+| `verdict_requested` | Server (`/ruling`, before generation) | Ruling call begins |
+| `ruling_completed` (Value Moment) | Server (`/ruling` success) | Verdict returned |
+| `ruling_failed` | Server (`/ruling` error) | Ruling generation throws |
+| `ruling_shared` | Server (`/share` success) | Share link created |
+| `ruling_flagged` | Client (exact-once, guarded by `flagged` state) | Flag button tapped |
+
+**Tokens:** `MIXPANEL_TOKEN` (backend, `backend/.env` locally / Railway env in prod) and
+`EXPO_PUBLIC_MIXPANEL_TOKEN` (frontend, `.env.local` / Vercel env in prod) — separate dev and
+production Mixpanel projects, same dev/prod split pattern as Supabase.
+
 ## Database (Supabase)
 - **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, rule_text_for_embedding, parent_rule_number, embedding (vector(1024)), cr_version (text); index on `parent_rule_number` for expansion queries
 - **cases** — usage logging (see Usage Logging above); includes ip_address (text, nullable) and source (text, nullable: 'user' | 'agent')
@@ -239,6 +275,7 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - backend/services/rag.js — RAG retrieval pipeline (anchors, expansion, cap)
 - backend/services/ruling.js — /ruling orchestration (Scryfall → RAG → Claude → citations)
 - backend/services/caseOwnership.js — shared case_id/session_id ownership check used by /ruling and /log
+- backend/services/mixpanel.js — consent-gated Mixpanel trackEvent, used by /ruling and /share
 - backend/services/categories.js — /categories orchestration (Scryfall → Haiku → JSON parse)
 - backend/services/scryfall.js — Scryfall fetch + card prompt blocks
 - backend/services/ruling-parse.js — Claude ruling response section parser
@@ -251,6 +288,8 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - backend/tests/*.test.js — node:test unit tests for RAG + ruling helpers (run via `npm test`)
 - constants/theme.ts — shared colours/fonts/error constant (COLOURS object, TITLE_FONT, BODY_FONT, GENERIC_ERROR_MESSAGE)
 - utils/scryfall.ts — shared `fetchCardImageUri` helper
+- utils/analytics.ts — Mixpanel client wrapper (consent storage, init, identify, track) — see Analytics (Mixpanel)
+- components/ConsentBanner.tsx — analytics consent accept/decline banner
 - scripts/embed_rules.py — CR download, chunk (`rule_text` for display, `rule_text_for_embedding` for Voyage), embed, upload (stores cr_version per row)
 - scripts/mtg_judge_test.py — Python test suite for the ruling engine
 - CLAUDE.md — this file
