@@ -1,0 +1,89 @@
+// Route tests for POST /ruling. RAG retrieval and prompt-building are
+// unit-tested elsewhere; here we verify server.js's request validation,
+// response shaping, and error mapping by injecting a fake generateRuling
+// into createApp.
+const test = require("node:test");
+const assert = require("node:assert");
+const request = require("supertest");
+
+// Guard against a real Telegram alert firing if these are ever set locally.
+process.env.TELEGRAM_BOT_TOKEN = "";
+process.env.TELEGRAM_CHAT_ID = "";
+
+const { createApp } = require("../server");
+const { RulingGenerationError } = require("../services/ruling");
+const { GENERIC_SERVER_ERROR_MESSAGE } = require("../config/app");
+const { createFakeSupabase } = require("./helpers/fakeSupabase");
+
+const sampleResult = {
+  case_id: "11111111-1111-1111-1111-111111111111",
+  ruling: "The trigger goes on the stack.",
+  explanation: "- Step one\n- Step two",
+  rules_cited: [{ rule_number: "603.3", rule_text: "603.3. ..." }],
+  oracle_referenced: "Whenever this creature attacks...",
+  cr_version: "test-cr-1.0",
+  rag_matches: [{ rule_number: "603.3", similarity: 0.91, expanded: false, anchored: false }],
+};
+
+let rulingImpl = async () => sampleResult;
+const app = createApp({
+  anthropic: {},
+  voyage: {},
+  supabase: createFakeSupabase(),
+  generateRuling: (...args) => rulingImpl(...args),
+});
+
+test("POST /ruling - 400 when cards is missing", async () => {
+  const res = await request(app).post("/ruling").send({});
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /cards must be a non-empty string array/);
+});
+
+test("POST /ruling - 400 when cards is an empty array", async () => {
+  const res = await request(app).post("/ruling").send({ cards: [] });
+  assert.strictEqual(res.status, 400);
+});
+
+test("POST /ruling - 200 forwards cards/situation/category to the service and returns its result", async () => {
+  rulingImpl = async ({ cards, situation, category }) => {
+    assert.deepStrictEqual(cards, ["Lightning Bolt", "Fog"]);
+    assert.strictEqual(situation, "Can I bolt in response to Fog?");
+    assert.strictEqual(category, "Timing and Priority");
+    return sampleResult;
+  };
+
+  const res = await request(app).post("/ruling").send({
+    cards: ["Lightning Bolt", "Fog"],
+    situation: "Can I bolt in response to Fog?",
+    category: "Timing and Priority",
+  });
+
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body, sampleResult);
+});
+
+test("POST /ruling - 500 with generic message when service throws RulingGenerationError", async () => {
+  rulingImpl = async () => {
+    throw new RulingGenerationError("VECTOR_SEARCH_FAILED", { message: "db down" });
+  };
+
+  const res = await request(app)
+    .post("/ruling")
+    .send({ cards: ["Lightning Bolt"] });
+
+  assert.strictEqual(res.status, 500);
+  assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);
+});
+
+test("POST /ruling - 500 with generic message on unexpected error", async () => {
+  rulingImpl = async () => {
+    throw new Error("boom");
+  };
+
+  const res = await request(app)
+    .post("/ruling")
+    .send({ cards: ["Lightning Bolt"] });
+
+  assert.strictEqual(res.status, 500);
+  assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);
+});
