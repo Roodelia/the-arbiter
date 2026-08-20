@@ -258,9 +258,12 @@ export default function Index() {
     'idle' | 'loading' | 'success' | 'error'
   >('idle');
 
-  const [refineText, setRefineText] = useState('');
-  const [refining, setRefining] = useState(false);
-  const [refineError, setRefineError] = useState('');
+  // Refine ruling feature — not wired to any UI control yet. Backlogged; see
+  // Roadmap Phases in CLAUDE.md. Keep commented (not deleted) so the intended
+  // implementation is preserved for when the UI is built.
+  // const [refineText, setRefineText] = useState('');
+  // const [refining, setRefining] = useState(false);
+  // const [refineError, setRefineError] = useState('');
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [isRulesOpen, setIsRulesOpen] = useState(false);
 
@@ -776,54 +779,55 @@ export default function Index() {
     }
   }, [rulingResult, selectedCards, selectedCategory, situation, flagReason, flagging]);
 
-  const onRefineRuling = useCallback(async () => {
-    const detail = refineText.trim();
-    if (!detail || refining) return;
-    setRefineError('');
-    setRefining(true);
-    try {
-      const categoryPayload = selectedCategoriesPayload(selectedCategory);
-      const res = await fetch(`${BACKEND_BASE_URL}/ruling`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cards: selectedCards.map((c) => c.name),
-          ...(categoryPayload ? { category: categoryPayload } : {}),
-          situation: detail,
-        }),
-      });
-      if (res.status === 429) {
-        setRefineError('');
-        setErrorMessage(RATE_LIMIT_MESSAGE);
-        return;
-      }
-      if (!res.ok) throw new Error('Failed to refine ruling');
-      const json = (await res.json()) as RulingResponse;
-
-      if (typeof json.case_id === 'string' && json.case_id.trim()) {
-        caseId.current = json.case_id.trim();
-      }
-
-      if (shareCopiedTimerRef.current) {
-        clearTimeout(shareCopiedTimerRef.current);
-        shareCopiedTimerRef.current = null;
-      }
-      setShareCopied(false);
-      setShareError(null);
-      setRulingResult(json);
-      setRefineText('');
-      requestAnimationFrame(() => {
-        scrollViewRef.current?.scrollTo({
-          y: Math.max(0, rulingCardScrollYRef.current - 8),
-          animated: true,
-        });
-      });
-    } catch {
-      setRefineError(NO_RULING_MESSAGE);
-    } finally {
-      setRefining(false);
-    }
-  }, [refineText, refining, selectedCards, selectedCategory]);
+  // Backlogged: refine-ruling-on-verdict (see Roadmap Phases in CLAUDE.md).
+  // const onRefineRuling = useCallback(async () => {
+  //   const detail = refineText.trim();
+  //   if (!detail || refining) return;
+  //   setRefineError('');
+  //   setRefining(true);
+  //   try {
+  //     const categoryPayload = selectedCategoriesPayload(selectedCategory);
+  //     const res = await fetch(`${BACKEND_BASE_URL}/ruling`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //         cards: selectedCards.map((c) => c.name),
+  //         ...(categoryPayload ? { category: categoryPayload } : {}),
+  //         situation: detail,
+  //       }),
+  //     });
+  //     if (res.status === 429) {
+  //       setRefineError('');
+  //       setErrorMessage(RATE_LIMIT_MESSAGE);
+  //       return;
+  //     }
+  //     if (!res.ok) throw new Error('Failed to refine ruling');
+  //     const json = (await res.json()) as RulingResponse;
+  //
+  //     if (typeof json.case_id === 'string' && json.case_id.trim()) {
+  //       caseId.current = json.case_id.trim();
+  //     }
+  //
+  //     if (shareCopiedTimerRef.current) {
+  //       clearTimeout(shareCopiedTimerRef.current);
+  //       shareCopiedTimerRef.current = null;
+  //     }
+  //     setShareCopied(false);
+  //     setShareError(null);
+  //     setRulingResult(json);
+  //     setRefineText('');
+  //     requestAnimationFrame(() => {
+  //       scrollViewRef.current?.scrollTo({
+  //         y: Math.max(0, rulingCardScrollYRef.current - 8),
+  //         animated: true,
+  //       });
+  //     });
+  //   } catch {
+  //     setRefineError(NO_RULING_MESSAGE);
+  //   } finally {
+  //     setRefining(false);
+  //   }
+  // }, [refineText, refining, selectedCards, selectedCategory]);
 
   const goToStep1 = useCallback(() => {
     caseId.current = generateId();
@@ -845,9 +849,9 @@ export default function Index() {
     flagReasonRef.current = '';
     setFlagReason('');
     setFlagError(null);
-    setRefineText('');
-    setRefining(false);
-    setRefineError('');
+    // setRefineText('');
+    // setRefining(false);
+    // setRefineError('');
     setStep(1);
   }, []);
 
@@ -1301,9 +1305,9 @@ export default function Index() {
 
               <View style={styles.section}>
                 <View style={styles.step3ActionStack}>
-                {refineError ? (
+                {/* {refineError ? (
                   <Text style={styles.refineErrorText}>{refineError}</Text>
-                ) : null}
+                ) : null} */}
 
                 <TouchableOpacity
                   onPress={() => {
