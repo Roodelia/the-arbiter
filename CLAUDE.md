@@ -44,7 +44,8 @@ POST /categories
   - Returns: { categories: string[] }
 
 POST /ruling
-  - Input: { cards: string[], case_id?: string, situation?: string, category?: string }
+  - Input: { cards: string[], case_id?: string, session_id?: string, situation?: string, category?: string }
+  - **case_id ownership**: a client-supplied `case_id` is only honoured if no `cases` row exists for it yet, or the existing row's `session_id` matches the request's `session_id`; otherwise the server mints a fresh UUID instead (`resolveCaseId` in services/ruling.js) — prevents a caller from overwriting another session's `rag_matches` via a guessed/reused `case_id`. Always returns the resolved `case_id` in the response so the client stays in sync.
   - Fetches Scryfall oracle text + official WotC rulings per card
   - Builds Voyage query from card oracle texts + situation + category; embeds with voyage-3.5 (`inputType: "query"`)
   - Vector search: Supabase `match_rules` with `match_count: 8`
@@ -53,7 +54,7 @@ POST /ruling
   - Merges vector + anchored + expanded rules; sorts anchored first, then semantic hits, then expanded; caps context at **12** rules (`RAG_CONTEXT_CAP`) — anchored kept, then semantic, then expanded fill remainder
   - Calls Claude Sonnet (`claude-sonnet-4-6`) with cached `RULING_SYSTEM_PROMPT`; user message includes CARD DATA block, RAG CR chunks, official Scryfall rulings, and situation/category focus instructions
   - Parses model output (`parseRulingResponse`); resolves `RULES CITED` rule numbers to full CR text from Supabase (exact match, then fuzzy prefix)
-  - Optional: if `case_id` provided, fire-and-forget upsert of `rag_matches` to `cases` table
+  - Fire-and-forget upsert of `rag_matches` to `cases` table under the resolved `case_id`
   - Sends Telegram alert on successful ruling (if configured)
   - Returns: { ruling, explanation, rules_cited, oracle_referenced, cr_version, rag_matches }
   - `rag_matches`: { rule_number, similarity, expanded, anchored, anchor_label? } per rule sent to the model

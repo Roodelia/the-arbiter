@@ -62,6 +62,22 @@ test("POST /ruling - 200 forwards cards/situation/category to the service and re
   assert.deepStrictEqual(res.body, sampleResult);
 });
 
+test("POST /ruling - forwards case_id/session_id to the service when provided", async () => {
+  rulingImpl = async ({ case_id, session_id }) => {
+    assert.strictEqual(case_id, "client-case-id");
+    assert.strictEqual(session_id, "client-session-id");
+    return sampleResult;
+  };
+
+  const res = await request(app).post("/ruling").send({
+    cards: ["Lightning Bolt"],
+    case_id: "client-case-id",
+    session_id: "client-session-id",
+  });
+
+  assert.strictEqual(res.status, 200);
+});
+
 test("POST /ruling - 500 with generic message when service throws RulingGenerationError", async () => {
   rulingImpl = async () => {
     throw new RulingGenerationError("VECTOR_SEARCH_FAILED", { message: "db down" });

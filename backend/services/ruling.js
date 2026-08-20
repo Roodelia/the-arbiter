@@ -141,6 +141,36 @@ async function persistRagMatches(supabase, case_id, ragMatches) {
 }
 
 /**
+ * A client-supplied case_id is only honoured if it either doesn't exist yet
+ * (first write for this case) or already belongs to the caller's session —
+ * otherwise a caller could pass an arbitrary case_id and overwrite another
+ * session's rag_matches via the upsert in persistRagMatches. On any mismatch
+ * or lookup failure we fall back to minting a fresh id rather than erroring,
+ * since logging is best-effort and shouldn't block a ruling.
+ */
+async function resolveCaseId(supabase, clientCaseId, sessionId) {
+  if (typeof clientCaseId !== "string" || !clientCaseId.trim()) {
+    return crypto.randomUUID();
+  }
+
+  const { data, error } = await supabase
+    .from("cases")
+    .select("session_id")
+    .eq("case_id", clientCaseId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("case_id ownership check failed:", error);
+    return crypto.randomUUID();
+  }
+  if (!data) return clientCaseId;
+  if (typeof sessionId === "string" && sessionId && data.session_id === sessionId) {
+    return clientCaseId;
+  }
+  return crypto.randomUUID();
+}
+
+/**
  * Full /ruling pipeline: Scryfall → RAG → Claude → resolve CR citations.
  */
 async function generateRuling({
@@ -150,8 +180,10 @@ async function generateRuling({
   cards,
   situation,
   category,
+  case_id: clientCaseId,
+  session_id,
 }) {
-  const case_id = crypto.randomUUID();
+  const case_id = await resolveCaseId(supabase, clientCaseId, session_id);
   const oracleData = await fetchAllCardOracle(cards);
 
   const cardDataBlock = buildCardDataBlock(oracleData);
@@ -222,5 +254,6 @@ module.exports = {
   buildSituationContextSection,
   buildRulingUserPrompt,
   buildRulingQueryString,
+  resolveCaseId,
   generateRuling,
 };
