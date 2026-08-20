@@ -37,6 +37,11 @@ backend/.env
 .env.local
 .env.development
 
+# downloaded/generated Comprehensive Rules cache (re-downloaded by
+# scripts/embed_rules.py — don't commit, it drifts from CR_URL and
+# caused a stale-cache bug once already)
+/comprehensive_rules.txt
+
 # typescript
 *.tsbuildinfo
 
