@@ -44,7 +44,7 @@ POST /categories
   - Returns: { categories: string[] }
 
 POST /ruling
-  - Input: { cards: string[], case_id?: string, session_id?: string, situation?: string, category?: string, analytics_consent?: boolean }
+  - Input: { cards: string[], case_id?: string, session_id?: string, situation?: string, category?: string, analytics_consent?: boolean, distinct_id?: string }
   - **case_id ownership**: a client-supplied `case_id` is only honoured if no `cases` row exists for it yet, or the existing row's `session_id` matches the request's `session_id`; otherwise the server mints a fresh UUID instead (`resolveCaseId` in services/ruling.js) — prevents a caller from overwriting another session's `rag_matches` via a guessed/reused `case_id`. Always returns the resolved `case_id` in the response so the client stays in sync.
   - Fetches Scryfall oracle text + official WotC rulings per card
   - Builds Voyage query from card oracle texts + situation + category; embeds with voyage-3.5 (`inputType: "query"`)
@@ -57,23 +57,25 @@ POST /ruling
   - Fire-and-forget upsert of `rag_matches` to `cases` table under the resolved `case_id`
   - Sends Telegram alert on successful ruling (if configured)
   - Tracks Mixpanel `verdict_requested` (before generation) then `ruling_completed` or `ruling_failed`
-    (distinct_id = session_id; see Analytics (Mixpanel) below) — no-ops unless `analytics_consent: true`
+    (distinct_id = the client's `distinct_id`, not `session_id`; see Analytics (Mixpanel) below) —
+    no-ops unless `analytics_consent: true`
   - Returns: { ruling, explanation, rules_cited, oracle_referenced, cr_version, rag_matches }
   - `rag_matches`: { rule_number, similarity, expanded, anchored, anchor_label? } per rule sent to the model
 
 POST /log
   - Input: { session_id, case_id, cards, selected_category?,
              situation?, ruling?, explanation?, rules_cited?,
-             flagged?, flag_reason?, source?, source_event?, analytics_consent? }
+             flagged?, flag_reason?, source?, source_event?, analytics_consent?, distinct_id? }
   - session_id and case_id are both required (400 if missing/blank)
   - **case_id ownership**: same rule as /ruling (see above) — rejects with 403 if `case_id` already
     belongs to a different `session_id` (`lookupCaseOwner`/`isOwnedBySession` in
     services/caseOwnership.js, shared with /ruling's `resolveCaseId`); unlike /ruling this never
     silently swaps in a different id — the write is refused outright
-  - `source_event` is tracking-only (not a `cases` column, never written to the DB) — when it's
-    `"ask_manajudge"`, tracks Mixpanel `ask_manajudge` server-side, piggybacking on the /log call
-    that already fires unconditionally on that tap rather than a dedicated endpoint (avoids the
-    ad-blocker loss a client-side send would have); see Analytics (Mixpanel) below
+  - `source_event`/`distinct_id` are tracking-only (not `cases` columns, never written to the DB) —
+    when `source_event` is `"ask_manajudge"`, tracks Mixpanel `ask_manajudge` server-side (distinct_id
+    = the client's `distinct_id`, not `session_id`), piggybacking on the /log call that already fires
+    unconditionally on that tap rather than a dedicated endpoint (avoids the ad-blocker loss a
+    client-side send would have); see Analytics (Mixpanel) below
   - Upserts case record to Supabase cases table by case_id; sets ip_address
     from X-Forwarded-For (first hop) or req.ip (trust proxy enabled for Railway)
   - Sets cr_version from the server CR_VERSION env (not client-supplied)
@@ -82,11 +84,12 @@ POST /log
   - Returns: { success: true, id } (id = cases row id)
 
 POST /share
-  - Input: { case_id?, session_id?, analytics_consent?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited }
+  - Input: { case_id?, analytics_consent?, distinct_id?, cards, category? (string or string[]), situation?, ruling, explanation, rules_cited }
   - Generates short 8-char alphanumeric ID
   - cr_version is set from the server CR_VERSION env (not client-supplied)
   - Inserts into Supabase shared_rulings table
-  - Tracks Mixpanel `ruling_shared` on success (distinct_id = session_id) — no-ops unless `analytics_consent: true`
+  - Tracks Mixpanel `ruling_shared` on success (distinct_id = the client's `distinct_id`) — no-ops
+    unless `analytics_consent: true`; doesn't take `session_id` (never needed it for anything else)
   - Returns: { success: true, id, url }
 
 GET /share/featured
@@ -184,17 +187,26 @@ Images are never stored — only card names.
 ## Analytics (Mixpanel)
 Product event tracking, separate from the Supabase `cases` usage log above (that's the system of
 record for every case; Mixpanel is for aggregate product analytics — funnel drop-off, share/flag
-rate, volume). No user accounts exist in this app, so there is no login-based identity: **distinct_id
-= session_id** on both client and server, set once via `mixpanel.identify(sessionId)` client-side
-and passed explicitly as `distinct_id` on every server-side `.track()` call — never reset, since a
-session's `session_id` never changes.
+rate, volume). No user accounts exist in this app, so there is no login-based identity.
+
+**distinct_id is a persistent id, deliberately separate from `session_id`.** `session_id` is
+ephemeral — a fresh `Math.random()` value generated client-side on every page load — and is left
+untouched, since it also drives `cases`/`case_id` ownership (see `/log` and `/ruling` above) and
+changing it would've altered case-grouping semantics no one asked to change. The Mixpanel identity
+instead lives in its own `localStorage` key (`manajudge_analytics_distinct_id`,
+`utils/analytics.ts`'s `getAnalyticsDistinctId()`), generated once and persisted across visits, so
+the same browser is recognised as one Mixpanel user over time — created only after consent is
+granted, never before. Client-side, `mixpanel.identify(distinctId)` is called once via
+`initAnalytics()`; server-side, the client passes `distinct_id` explicitly on every `/ruling`,
+`/share`, and (for `ask_manajudge`) `/log` call, and `trackEvent` (`backend/services/mixpanel.js`)
+uses it as-is — omitted entirely (not sent as `null`) when consent hasn't been granted yet.
 
 **Consent-gated (EU/CA users in scope):** a banner (`components/ConsentBanner.tsx`, shown when
 `utils/analytics.ts`'s `getStoredConsent()` returns `null`) gates tracking entirely — nothing fires,
 client or server, until the user accepts. Choice persists in `localStorage`
 (`manajudge_analytics_consent`). Client sends `analytics_consent: hasAnalyticsConsent()` on every
-`/ruling` and `/share` call; the backend's `trackEvent` (`backend/services/mixpanel.js`) no-ops
-unless that flag is exactly `true`, regardless of whether a token is configured.
+`/ruling`, `/share`, and `/log` call; the backend's `trackEvent` no-ops unless that flag is exactly
+`true`, regardless of whether a token is configured.
 
 **Web-only today:** uses `mixpanel-browser` (DOM-based) client-side, matching the fact that only the
 web build ships (see Hosting). Native iOS/Android tracking would need `mixpanel-react-native` plus a

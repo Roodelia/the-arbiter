@@ -9,6 +9,7 @@ const IS_WEB = Platform.OS === 'web';
 
 const MIXPANEL_TOKEN = process.env.EXPO_PUBLIC_MIXPANEL_TOKEN;
 const CONSENT_STORAGE_KEY = 'manajudge_analytics_consent';
+const DISTINCT_ID_STORAGE_KEY = 'manajudge_analytics_distinct_id';
 
 let initialized = false;
 
@@ -35,18 +36,51 @@ export function hasAnalyticsConsent(): boolean {
   return getStoredConsent() === true;
 }
 
+function generateDistinctId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 /**
- * Initializes Mixpanel and sets distinct_id = sessionId (no login exists in
- * this app, so the session_id already used to group cases in Supabase is
- * the closest thing to a stable user id — keeps client and server events
- * correlated under the same Mixpanel user). No-ops without consent, a
+ * The persistent Mixpanel distinct_id — deliberately separate from the
+ * app's own session_id, which stays ephemeral (regenerated every page
+ * load) and keeps grouping/owning Supabase `cases` rows exactly as before;
+ * changing that would've altered case-ownership semantics no one asked to
+ * change. This id is persisted in localStorage instead, so the same
+ * browser is recognised as one Mixpanel user across visits, not just
+ * within a single page load — created only once consent is granted, and
+ * never before. Returns null without consent; callers should omit
+ * distinct_id fields entirely rather than send null.
+ */
+export function getAnalyticsDistinctId(): string | null {
+  if (!hasAnalyticsConsent()) return null;
+  const storage = getLocalStorage();
+  if (!storage) return null;
+
+  const existing = storage.getItem(DISTINCT_ID_STORAGE_KEY);
+  if (existing) return existing;
+
+  const id = generateDistinctId();
+  storage.setItem(DISTINCT_ID_STORAGE_KEY, id);
+  return id;
+}
+
+/**
+ * Initializes Mixpanel and identifies the browser under its persistent
+ * distinct_id (see getAnalyticsDistinctId). No-ops without consent, a
  * configured token, or a web runtime.
  */
-export function initAnalytics(sessionId: string): void {
-  if (initialized || !IS_WEB || !MIXPANEL_TOKEN || !hasAnalyticsConsent()) return;
+export function initAnalytics(): void {
+  if (initialized || !IS_WEB || !MIXPANEL_TOKEN) return;
+
+  const distinctId = getAnalyticsDistinctId();
+  if (!distinctId) return;
 
   mixpanel.init(MIXPANEL_TOKEN, { autocapture: false, ip: true });
-  mixpanel.identify(sessionId);
+  mixpanel.identify(distinctId);
   initialized = true;
 }
 

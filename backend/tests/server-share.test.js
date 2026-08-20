@@ -105,7 +105,7 @@ test("POST /share - 200 inserts a row and returns the share url", async () => {
   assert.strictEqual(row.category, JSON.stringify(["Direct Damage", "Timing"]));
 });
 
-test("POST /share - tracks ruling_shared with session_id/consent/ip on success", async () => {
+test("POST /share - tracks ruling_shared with distinct_id/consent/ip on success (not session_id)", async () => {
   fakeSupabase.setResult("shared_rulings", { data: null, error: null });
 
   await request(app)
@@ -114,14 +114,14 @@ test("POST /share - tracks ruling_shared with session_id/consent/ip on success",
     .send({
       ...validBody,
       cards: ["Lightning Bolt", "Fog"],
-      session_id: "sess-1",
+      distinct_id: "distinct-1",
       analytics_consent: true,
     });
 
   assert.strictEqual(trackCalls.length, 1);
   const [eventName, distinctId, properties, consent, ip] = trackCalls[0];
   assert.strictEqual(eventName, "ruling_shared");
-  assert.strictEqual(distinctId, "sess-1");
+  assert.strictEqual(distinctId, "distinct-1");
   assert.strictEqual(properties.card_count, 2);
   assert.strictEqual(consent, true);
   assert.strictEqual(ip, "203.0.113.5");

@@ -111,7 +111,7 @@ test("POST /ruling - 500 with generic message on unexpected error", async () => 
   assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);
 });
 
-test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding session_id/consent/ip", async () => {
+test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding distinct_id/consent/ip (not session_id)", async () => {
   rulingImpl = async () => sampleResult;
 
   await request(app)
@@ -122,6 +122,7 @@ test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding 
       situation: "Can I bolt in response?",
       category: "Timing",
       session_id: "sess-1",
+      distinct_id: "distinct-1",
       analytics_consent: true,
     });
 
@@ -129,7 +130,7 @@ test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding 
 
   const [requestedEvent, requestedId, requestedProps, requestedConsent, requestedIp] = trackCalls[0];
   assert.strictEqual(requestedEvent, "verdict_requested");
-  assert.strictEqual(requestedId, "sess-1");
+  assert.strictEqual(requestedId, "distinct-1");
   assert.strictEqual(requestedProps.card_count, 2);
   assert.strictEqual(requestedProps.has_situation, true);
   assert.strictEqual(requestedConsent, true);
@@ -137,7 +138,7 @@ test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding 
 
   const [completedEvent, completedId, completedProps, completedConsent, completedIp] = trackCalls[1];
   assert.strictEqual(completedEvent, "ruling_completed");
-  assert.strictEqual(completedId, "sess-1");
+  assert.strictEqual(completedId, "distinct-1");
   assert.strictEqual(completedProps.card_count, 2);
   assert.strictEqual(completedProps.rules_cited_count, 1);
   assert.strictEqual(completedProps.rag_match_count, 1);
@@ -168,13 +169,14 @@ test("POST /ruling - tracks ruling_failed with the error code on RulingGeneratio
   await request(app).post("/ruling").send({
     cards: ["Lightning Bolt"],
     session_id: "sess-1",
+    distinct_id: "distinct-1",
     analytics_consent: true,
   });
 
   assert.strictEqual(trackCalls.length, 2);
   const [event, id, props] = trackCalls[1];
   assert.strictEqual(event, "ruling_failed");
-  assert.strictEqual(id, "sess-1");
+  assert.strictEqual(id, "distinct-1");
   assert.strictEqual(props.error_code, "VECTOR_SEARCH_FAILED");
 });
 

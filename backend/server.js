@@ -177,6 +177,7 @@ function createApp({
       case_id,
       session_id,
       analytics_consent,
+      distinct_id,
     } = req.body || {};
 
     if (!isNonEmptyStringArray(cards)) {
@@ -187,7 +188,7 @@ function createApp({
 
     trackEvent(
       "verdict_requested",
-      session_id,
+      distinct_id,
       {
         card_count: cards.length,
         has_situation: Boolean(situation && situation.trim()),
@@ -217,7 +218,7 @@ function createApp({
 
       trackEvent(
         "ruling_completed",
-        session_id,
+        distinct_id,
         {
           card_count: cards.length,
           has_situation: Boolean(situation && situation.trim()),
@@ -244,7 +245,7 @@ function createApp({
         }
         trackEvent(
           "ruling_failed",
-          session_id,
+          distinct_id,
           { error_code: err.code },
           analytics_consent,
           clientIp,
@@ -254,7 +255,7 @@ function createApp({
       console.error("Error in /ruling handler:", err);
       trackEvent(
         "ruling_failed",
-        session_id,
+        distinct_id,
         { error_code: "UNKNOWN" },
         analytics_consent,
         clientIp,
@@ -279,6 +280,7 @@ function createApp({
       source,
       source_event,
       analytics_consent,
+      distinct_id,
     } = req.body || {};
 
     if (typeof session_id !== "string" || session_id.trim().length === 0) {
@@ -312,7 +314,7 @@ function createApp({
       if (source_event === "ask_manajudge") {
         trackEvent(
           "ask_manajudge",
-          session_id,
+          distinct_id,
           { card_count: cards.length },
           analytics_consent,
           clientIp,
@@ -356,8 +358,8 @@ function createApp({
     const clientIp = getClientIp(req);
     const {
       case_id,
-      session_id,
       analytics_consent,
+      distinct_id,
       cards,
       category,
       situation,
@@ -462,7 +464,7 @@ function createApp({
         if (!error) {
           trackEvent(
             "ruling_shared",
-            session_id,
+            distinct_id,
             { card_count: cards.length },
             analytics_consent,
             clientIp,
