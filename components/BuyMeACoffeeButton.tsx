@@ -55,14 +55,15 @@ export function BuyMeACoffeeButton({
     container.innerHTML = `
       <style>
         .bmc-btn svg { height: 32px !important; margin-bottom: 0px !important; box-shadow: none !important; border: none !important; vertical-align: middle !important; transform: scale(0.9); flex-shrink: 0; }
-        .bmc-btn { min-width: 210px; color: ${fontColor} !important; background-color: ${bgColor} !important; height: 60px; border-radius: 12px; font-size: ${fontSize}; font-weight: ${fontWeight}; border: none; padding: 0px 24px; line-height: 27px; text-decoration: none !important; display: inline-flex !important; align-items: center; font-family: ${fontInfo.css} !important; -webkit-box-sizing: border-box !important; box-sizing: border-box !important; }
+        .bmc-btn { min-width: 210px; color: ${fontColor} !important; background-color: ${bgColor} !important; height: 50px; border-radius: 12px; font-size: ${fontSize}; font-weight: ${fontWeight}; border: none; padding: 0px 12px; line-height: 28px; text-decoration: none !important; display: inline-flex !important; align-items: center; font-family: ${fontInfo.css} !important; -webkit-box-sizing: border-box !important; box-sizing: border-box !important; }
         .bmc-btn:hover, .bmc-btn:active, .bmc-btn:focus { text-decoration: none !important; cursor: pointer; }
+        .bmc-btn-emoji { display: inline-block; line-height: 0; flex-shrink: 0; }
         .bmc-btn-text { text-align: left; margin-left: 8px; display: inline-block; line-height: 0; width: 100%; flex-shrink: 0; font-family: ${fontInfo.css} !important; white-space: nowrap; }
         .logo-outline { fill: ${outlineColor}; }
         .logo-coffee { fill: ${coffeeColor}; }
       </style>
       <div class="bmc-btn-container">
-        <a class="bmc-btn" target="_blank" rel="noopener noreferrer" href="https://buymeacoffee.com/${slug}">${emoji}<span class="bmc-btn-text">${text}</span></a>
+        <a class="bmc-btn" target="_blank" rel="noopener noreferrer" href="https://buymeacoffee.com/${slug}"><span class="bmc-btn-emoji">${emoji}</span><span class="bmc-btn-text">${text}</span></a>
       </div>
     `;
 
