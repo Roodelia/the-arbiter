@@ -64,12 +64,16 @@ POST /ruling
 POST /log
   - Input: { session_id, case_id, cards, selected_category?,
              situation?, ruling?, explanation?, rules_cited?,
-             flagged?, flag_reason?, source? }
+             flagged?, flag_reason?, source?, source_event?, analytics_consent? }
   - session_id and case_id are both required (400 if missing/blank)
   - **case_id ownership**: same rule as /ruling (see above) — rejects with 403 if `case_id` already
     belongs to a different `session_id` (`lookupCaseOwner`/`isOwnedBySession` in
     services/caseOwnership.js, shared with /ruling's `resolveCaseId`); unlike /ruling this never
     silently swaps in a different id — the write is refused outright
+  - `source_event` is tracking-only (not a `cases` column, never written to the DB) — when it's
+    `"ask_manajudge"`, tracks Mixpanel `ask_manajudge` server-side, piggybacking on the /log call
+    that already fires unconditionally on that tap rather than a dedicated endpoint (avoids the
+    ad-blocker loss a client-side send would have); see Analytics (Mixpanel) below
   - Upserts case record to Supabase cases table by case_id; sets ip_address
     from X-Forwarded-For (first hop) or req.ip (trust proxy enabled for Railway)
   - Sets cr_version from the server CR_VERSION env (not client-supplied)
@@ -199,12 +203,17 @@ dev-client build, neither of which exist yet.
 **Events:**
 | Event | Fires from | Trigger |
 |---|---|---|
-| `cards_selected` | Client | "Ask ManaJudge" tap, Step 1→2 |
+| `cards_selected` | Client | Card clicked in the autocomplete dropdown (`addCard`) |
+| `ask_manajudge` | Server (`/log`, via `source_event`) | "Ask ManaJudge" tap, Step 1→2 |
 | `verdict_requested` | Server (`/ruling`, before generation) | Ruling call begins |
 | `ruling_completed` (Value Moment) | Server (`/ruling` success) | Verdict returned |
 | `ruling_failed` | Server (`/ruling` error) | Ruling generation throws |
 | `ruling_shared` | Server (`/share` success) | Share link created |
 | `ruling_flagged` | Client (exact-once, guarded by `flagged` state) | Flag button tapped |
+
+`cards_selected` stays client-side by necessity — autocomplete and card-image lookups go straight
+from the browser to Scryfall (see Scryfall Integration), never touching this backend, so there's no
+server-side signal to piggyback on for that one.
 
 **Tokens:** `MIXPANEL_TOKEN` (backend, `backend/.env` locally / Railway env in prod) and
 `EXPO_PUBLIC_MIXPANEL_TOKEN` (frontend, `.env.local` / Vercel env in prod) — separate dev and
