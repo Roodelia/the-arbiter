@@ -164,7 +164,7 @@ test("POST /log - client-supplied cr_version and rag_matches are ignored", async
   assert.strictEqual(row.rag_matches, undefined);
 });
 
-test("POST /log - tracks ask_manajudge when source_event matches, forwarding session_id/consent/ip", async () => {
+test("POST /log - tracks ask_manajudge when source_event matches, forwarding distinct_id/consent/ip (not session_id)", async () => {
   fakeSupabase.setResult("cases", [
     { data: null, error: null },
     { data: { id: 42 }, error: null },
@@ -178,13 +178,14 @@ test("POST /log - tracks ask_manajudge when source_event matches, forwarding ses
       case_id: "case-1",
       cards: ["Lightning Bolt", "Fog"],
       source_event: "ask_manajudge",
+      distinct_id: "distinct-1",
       analytics_consent: true,
     });
 
   assert.strictEqual(trackCalls.length, 1);
   const [eventName, distinctId, properties, consent, ip] = trackCalls[0];
   assert.strictEqual(eventName, "ask_manajudge");
-  assert.strictEqual(distinctId, "sess-1");
+  assert.strictEqual(distinctId, "distinct-1");
   assert.strictEqual(properties.card_count, 2);
   assert.strictEqual(consent, true);
   assert.strictEqual(ip, "203.0.113.5");
@@ -226,7 +227,7 @@ test("POST /log - does not track ask_manajudge on a 403 (rejected case_id owners
   assert.strictEqual(trackCalls.length, 0);
 });
 
-test("POST /log - source_event and analytics_consent are never written to the cases row", async () => {
+test("POST /log - source_event, analytics_consent, and distinct_id are never written to the cases row", async () => {
   fakeSupabase.setResult("cases", [
     { data: null, error: null },
     { data: { id: 42 }, error: null },
@@ -238,6 +239,7 @@ test("POST /log - source_event and analytics_consent are never written to the ca
     cards: ["Lightning Bolt"],
     source_event: "ask_manajudge",
     analytics_consent: true,
+    distinct_id: "distinct-1",
   });
 
   const upsertCall = fakeSupabase.calls.find(
@@ -246,6 +248,7 @@ test("POST /log - source_event and analytics_consent are never written to the ca
   const [row] = upsertCall.args;
   assert.strictEqual(row.source_event, undefined);
   assert.strictEqual(row.analytics_consent, undefined);
+  assert.strictEqual(row.distinct_id, undefined);
 });
 
 test("POST /log - 500 with generic message when the ownership lookup errors", async () => {

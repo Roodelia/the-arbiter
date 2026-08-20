@@ -1,6 +1,7 @@
 import { BODY_FONT, COLOURS, GENERIC_ERROR_MESSAGE, TITLE_FONT } from '@/constants/theme';
 import { fetchCardImageUri } from '@/utils/scryfall';
 import {
+  getAnalyticsDistinctId,
   getStoredConsent,
   hasAnalyticsConsent,
   initAnalytics,
@@ -369,16 +370,14 @@ export default function Index() {
     if (consent === null) {
       setShowConsentBanner(true);
     } else if (consent === true) {
-      initAnalytics(sessionId);
+      initAnalytics();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onAcceptAnalyticsConsent = useCallback(() => {
     setStoredConsent(true);
-    initAnalytics(sessionId);
+    initAnalytics();
     setShowConsentBanner(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onDeclineAnalyticsConsent = useCallback(() => {
@@ -438,6 +437,7 @@ export default function Index() {
 
   const logCase = async (data: Record<string, unknown>) => {
     try {
+      const distinctId = getAnalyticsDistinctId();
       await fetch(`${BACKEND_BASE_URL}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -446,6 +446,7 @@ export default function Index() {
           case_id: caseId.current,
           source: 'user',
           analytics_consent: hasAnalyticsConsent(),
+          ...(distinctId ? { distinct_id: distinctId } : {}),
           ...data,
         }),
       });
@@ -640,11 +641,13 @@ export default function Index() {
 
     setIsRulingLoading(true);
     try {
+    const distinctId = getAnalyticsDistinctId();
     const payload: {
       cards: string[];
       case_id: string;
       session_id: string;
       analytics_consent: boolean;
+      distinct_id?: string;
       situation?: string;
       category?: string;
     } = {
@@ -652,6 +655,7 @@ export default function Index() {
       case_id: caseId.current,
       session_id: sessionId,
       analytics_consent: hasAnalyticsConsent(),
+      ...(distinctId ? { distinct_id: distinctId } : {}),
       ...(categoryPayload ? { category: categoryPayload } : {}),
       ...(situation.trim() ? { situation: situation.trim() } : {}),
     };
@@ -715,13 +719,14 @@ export default function Index() {
     setShareError(null);
     setSharing(true);
     try {
+      const distinctId = getAnalyticsDistinctId();
       const res = await fetch(`${BACKEND_BASE_URL}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: caseId.current,
-          session_id: sessionId,
           analytics_consent: hasAnalyticsConsent(),
+          ...(distinctId ? { distinct_id: distinctId } : {}),
           cards: selectedCards.map((c) => c.name),
           ...(selectedCategory.length > 0
             ? { category: selectedCategory }
