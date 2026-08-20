@@ -1232,7 +1232,7 @@ export default function Index() {
 
       {step === 3 ? (
         <>
-          <BuyMeACoffeeWidget entranceDelayMs={3000} />
+          <BuyMeACoffeeWidget />
 
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 

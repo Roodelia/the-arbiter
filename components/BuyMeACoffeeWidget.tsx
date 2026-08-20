@@ -22,13 +22,13 @@ type BuyMeACoffeeWidgetProps = {
 
 export function BuyMeACoffeeWidget({
   id = 'manajudge',
-  description = 'Support me on Buy me a coffee!',
-  message = '"Hope this helped! If it saved you a headache or a table argument, a coffee keeps ManaJudge free for the next player who needs one."',
+  description = 'Support ManaJudge on Buy me a coffee!',
+  message = '"Help support ManaJudge to keep it free for the growing MTG community"',
   color = '#a67c2e',
   position = 'Right',
   xMargin = 18,
   yMargin = 18,
-  entranceDelayMs = 0,
+  entranceDelayMs = 10000,
 }: BuyMeACoffeeWidgetProps) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
