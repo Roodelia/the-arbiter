@@ -219,6 +219,12 @@ server-side signal to piggyback on for that one.
 `EXPO_PUBLIC_MIXPANEL_TOKEN` (frontend, `.env.local` / Vercel env in prod) — separate dev and
 production Mixpanel projects, same dev/prod split pattern as Supabase.
 
+**Geolocation:** enabled — client-side `mixpanel.init` sets `ip: true` (`utils/analytics.ts`); all
+server-side `trackEvent` calls pass the same `getClientIp(req)` already used for the `cases` table's
+`ip_address` column as a 5th `ip` argument, which `createTracker` merges into Mixpanel's reserved
+`ip` property so Mixpanel derives `$country_code`/`$city` itself — the raw IP isn't stored as an
+event property, only used for that derivation.
+
 ## Database (Supabase)
 - **comprehensive_rules** — CR chunks with pgvector embeddings; columns include rule_number, rule_text, rule_text_for_embedding, parent_rule_number, embedding (vector(1024)), cr_version (text); index on `parent_rule_number` for expansion queries
 - **cases** — usage logging (see Usage Logging above); includes ip_address (text, nullable) and source (text, nullable: 'user' | 'agent')

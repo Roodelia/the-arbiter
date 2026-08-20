@@ -71,4 +71,31 @@ describe("createTracker", () => {
     const trackEvent = createTracker(client);
     assert.doesNotThrow(() => trackEvent("ruling_completed", "sess-1", {}, true));
   });
+
+  it("merges ip into the tracked properties for Mixpanel's geolocation", () => {
+    const { client, calls } = fakeClient();
+    const trackEvent = createTracker(client);
+
+    trackEvent("ruling_completed", "sess-1", { card_count: 2 }, true, "203.0.113.5");
+
+    const [, props] = calls[0];
+    assert.deepEqual(props, {
+      distinct_id: "sess-1",
+      card_count: 2,
+      ip: "203.0.113.5",
+    });
+  });
+
+  it("omits ip when not supplied, rather than sending an empty/undefined value", () => {
+    const { client, calls } = fakeClient();
+    const trackEvent = createTracker(client);
+
+    trackEvent("ruling_completed", "sess-1", { card_count: 2 }, true);
+    trackEvent("ruling_completed", "sess-1", { card_count: 2 }, true, "");
+    trackEvent("ruling_completed", "sess-1", { card_count: 2 }, true, undefined);
+
+    for (const [, props] of calls) {
+      assert.equal("ip" in props, false);
+    }
+  });
 });

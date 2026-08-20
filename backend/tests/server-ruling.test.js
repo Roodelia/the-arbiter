@@ -111,27 +111,31 @@ test("POST /ruling - 500 with generic message on unexpected error", async () => 
   assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);
 });
 
-test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding session_id/consent", async () => {
+test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding session_id/consent/ip", async () => {
   rulingImpl = async () => sampleResult;
 
-  await request(app).post("/ruling").send({
-    cards: ["Lightning Bolt", "Fog"],
-    situation: "Can I bolt in response?",
-    category: "Timing",
-    session_id: "sess-1",
-    analytics_consent: true,
-  });
+  await request(app)
+    .post("/ruling")
+    .set("X-Forwarded-For", "203.0.113.5")
+    .send({
+      cards: ["Lightning Bolt", "Fog"],
+      situation: "Can I bolt in response?",
+      category: "Timing",
+      session_id: "sess-1",
+      analytics_consent: true,
+    });
 
   assert.strictEqual(trackCalls.length, 2);
 
-  const [requestedEvent, requestedId, requestedProps, requestedConsent] = trackCalls[0];
+  const [requestedEvent, requestedId, requestedProps, requestedConsent, requestedIp] = trackCalls[0];
   assert.strictEqual(requestedEvent, "verdict_requested");
   assert.strictEqual(requestedId, "sess-1");
   assert.strictEqual(requestedProps.card_count, 2);
   assert.strictEqual(requestedProps.has_situation, true);
   assert.strictEqual(requestedConsent, true);
+  assert.strictEqual(requestedIp, "203.0.113.5");
 
-  const [completedEvent, completedId, completedProps, completedConsent] = trackCalls[1];
+  const [completedEvent, completedId, completedProps, completedConsent, completedIp] = trackCalls[1];
   assert.strictEqual(completedEvent, "ruling_completed");
   assert.strictEqual(completedId, "sess-1");
   assert.strictEqual(completedProps.card_count, 2);
@@ -139,6 +143,7 @@ test("POST /ruling - tracks verdict_requested then ruling_completed, forwarding 
   assert.strictEqual(completedProps.rag_match_count, 1);
   assert.strictEqual(completedProps.cr_version, "test-cr-1.0");
   assert.strictEqual(completedConsent, true);
+  assert.strictEqual(completedIp, "203.0.113.5");
 });
 
 test("POST /ruling - forwards analytics_consent as-is (false/omitted) rather than gating itself", async () => {
