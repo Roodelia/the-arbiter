@@ -63,6 +63,11 @@ POST /log
   - Input: { session_id, case_id, cards, selected_category?,
              situation?, ruling?, explanation?, rules_cited?,
              flagged?, flag_reason?, source? }
+  - session_id and case_id are both required (400 if missing/blank)
+  - **case_id ownership**: same rule as /ruling (see above) — rejects with 403 if `case_id` already
+    belongs to a different `session_id` (`lookupCaseOwner`/`isOwnedBySession` in
+    services/caseOwnership.js, shared with /ruling's `resolveCaseId`); unlike /ruling this never
+    silently swaps in a different id — the write is refused outright
   - Upserts case record to Supabase cases table by case_id; sets ip_address
     from X-Forwarded-For (first hop) or req.ip (trust proxy enabled for Railway)
   - Sets cr_version from the server CR_VERSION env (not client-supplied)
@@ -233,6 +238,7 @@ Phase 4: Community rulings, upvote/dispute, reputation system
 - backend/config/ruling.js — ruling model + token limits
 - backend/services/rag.js — RAG retrieval pipeline (anchors, expansion, cap)
 - backend/services/ruling.js — /ruling orchestration (Scryfall → RAG → Claude → citations)
+- backend/services/caseOwnership.js — shared case_id/session_id ownership check used by /ruling and /log
 - backend/services/categories.js — /categories orchestration (Scryfall → Haiku → JSON parse)
 - backend/services/scryfall.js — Scryfall fetch + card prompt blocks
 - backend/services/ruling-parse.js — Claude ruling response section parser

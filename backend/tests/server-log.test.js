@@ -43,13 +43,34 @@ test("POST /log - 400 when session_id is blank", async () => {
 test("POST /log - 400 when cards is missing", async () => {
   const res = await request(app)
     .post("/log")
-    .send({ session_id: "sess-1" });
+    .send({ session_id: "sess-1", case_id: "case-1" });
   assert.strictEqual(res.status, 400);
   assert.match(res.body.error, /cards must be a non-empty string array/);
 });
 
+test("POST /log - 400 when case_id is missing", async () => {
+  const res = await request(app)
+    .post("/log")
+    .send({ session_id: "sess-1", cards: ["Lightning Bolt"] });
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /case_id is required/);
+});
+
+test("POST /log - 400 when case_id is blank", async () => {
+  const res = await request(app)
+    .post("/log")
+    .send({ session_id: "sess-1", case_id: "   ", cards: ["Lightning Bolt"] });
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /case_id is required/);
+});
+
 test("POST /log - 200 upserts and echoes back the new row id", async () => {
-  fakeSupabase.setResult("cases", { data: { id: 42 }, error: null });
+  // First .from("cases") call is the ownership lookup (no existing row),
+  // second is the upsert itself.
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: { id: 42 }, error: null },
+  ]);
 
   const res = await request(app).post("/log").send({
     session_id: "sess-1",
@@ -84,11 +105,49 @@ test("POST /log - 200 upserts and echoes back the new row id", async () => {
   assert.deepStrictEqual(options, { onConflict: "case_id", ignoreDuplicates: false });
 });
 
+test("POST /log - 200 when the existing row already belongs to this session (repeat upsert)", async () => {
+  fakeSupabase.setResult("cases", [
+    { data: { session_id: "sess-1" }, error: null },
+    { data: { id: 42 }, error: null },
+  ]);
+
+  const res = await request(app).post("/log").send({
+    session_id: "sess-1",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+    ruling: "The trigger goes on the stack.",
+  });
+
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body, { success: true, id: 42 });
+});
+
+test("POST /log - 403 when case_id belongs to a different session", async () => {
+  fakeSupabase.setResult("cases", { data: { session_id: "sess-victim" }, error: null });
+
+  const res = await request(app).post("/log").send({
+    session_id: "sess-attacker",
+    case_id: "case-1",
+    cards: ["Lightning Bolt"],
+  });
+
+  assert.strictEqual(res.status, 403);
+  assert.match(res.body.error, /does not belong to this session/);
+  const upsertCall = fakeSupabase.calls.find(
+    (c) => c.table === "cases" && c.method === "upsert",
+  );
+  assert.strictEqual(upsertCall, undefined, "must not upsert into another session's row");
+});
+
 test("POST /log - client-supplied cr_version and rag_matches are ignored", async () => {
-  fakeSupabase.setResult("cases", { data: { id: 43 }, error: null });
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: { id: 43 }, error: null },
+  ]);
 
   await request(app).post("/log").send({
     session_id: "sess-2",
+    case_id: "case-2",
     cards: ["Fog"],
     cr_version: "client-supplied-should-be-ignored",
     rag_matches: [{ rule_number: "999.9" }],
@@ -102,12 +161,26 @@ test("POST /log - client-supplied cr_version and rag_matches are ignored", async
   assert.strictEqual(row.rag_matches, undefined);
 });
 
-test("POST /log - 500 with generic message when supabase returns an error", async () => {
+test("POST /log - 500 with generic message when the ownership lookup errors", async () => {
   fakeSupabase.setResult("cases", { data: null, error: { message: "db unavailable" } });
 
   const res = await request(app)
     .post("/log")
-    .send({ session_id: "sess-3", cards: ["Fog"] });
+    .send({ session_id: "sess-3", case_id: "case-3", cards: ["Fog"] });
+
+  assert.strictEqual(res.status, 500);
+  assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);
+});
+
+test("POST /log - 500 with generic message when the upsert itself errors", async () => {
+  fakeSupabase.setResult("cases", [
+    { data: null, error: null },
+    { data: null, error: { message: "db unavailable" } },
+  ]);
+
+  const res = await request(app)
+    .post("/log")
+    .send({ session_id: "sess-4", case_id: "case-4", cards: ["Fog"] });
 
   assert.strictEqual(res.status, 500);
   assert.strictEqual(res.body.error, GENERIC_SERVER_ERROR_MESSAGE);

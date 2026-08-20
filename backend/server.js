@@ -21,6 +21,7 @@ const {
   SHARE_APP_BASE,
 } = require("./config/app");
 const { isNonEmptyStringArray } = require("./utils/validators");
+const { lookupCaseOwner, isOwnedBySession } = require("./services/caseOwnership");
 const {
   getAdminSecret,
   verifyAdminPassword,
@@ -230,11 +231,25 @@ function createApp({
     if (typeof session_id !== "string" || session_id.trim().length === 0) {
       return res.status(400).json({ error: "session_id is required" });
     }
+    if (typeof case_id !== "string" || case_id.trim().length === 0) {
+      return res.status(400).json({ error: "case_id is required" });
+    }
     if (!isNonEmptyStringArray(cards)) {
       return res.status(400).json({ error: "cards must be a non-empty string array" });
     }
 
     try {
+      const { data: existingCase, error: lookupError } = await lookupCaseOwner(
+        supabase,
+        case_id,
+      );
+      if (lookupError) throw lookupError;
+      if (existingCase && !isOwnedBySession(existingCase.session_id, session_id)) {
+        return res
+          .status(403)
+          .json({ error: "case_id does not belong to this session" });
+      }
+
       const otherFields = {
         session_id,
         cards,
