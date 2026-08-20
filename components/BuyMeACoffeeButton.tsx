@@ -49,16 +49,16 @@ export function BuyMeACoffeeButton({
       document.head.appendChild(link);
     }
 
-    const fontSize = fontInfo.bold ? '24px' : '28px';
+    const fontSize = fontInfo.bold ? '16px' : '20px';
     const fontWeight = fontInfo.bold ? 'Bold' : 'Normal';
 
     container.innerHTML = `
       <style>
-        .bmc-btn svg { height: 32px !important; margin-bottom: 0px !important; box-shadow: none !important; border: none !important; vertical-align: middle !important; transform: scale(0.9); flex-shrink: 0; }
-        .bmc-btn { min-width: 210px; color: ${fontColor} !important; background-color: ${bgColor} !important; height: 50px; border-radius: 12px; font-size: ${fontSize}; font-weight: ${fontWeight}; border: none; padding: 0px 12px; line-height: 28px; text-decoration: none !important; display: inline-flex !important; align-items: center; font-family: ${fontInfo.css} !important; -webkit-box-sizing: border-box !important; box-sizing: border-box !important; }
+        .bmc-btn svg { height: 32px !important; margin-bottom: 0px !important; box-shadow: none !important; border: none !important; vertical-align: middle !important; transform: scale(0.8); flex-shrink: 0; }
+        .bmc-btn { min-width: 145px; color: ${fontColor} !important; background-color: ${bgColor} !important; height: 45px; border-radius: 12px; font-size: ${fontSize}; font-weight: ${fontWeight}; border: none; padding: 0px 8px; line-height: 20px; text-decoration: none !important; display: inline-flex !important; align-items: center; font-family: ${fontInfo.css} !important; -webkit-box-sizing: border-box !important; box-sizing: border-box !important; }
         .bmc-btn:hover, .bmc-btn:active, .bmc-btn:focus { text-decoration: none !important; cursor: pointer; }
         .bmc-btn-emoji { display: inline-block; line-height: 0; flex-shrink: 0; }
-        .bmc-btn-text { text-align: left; margin-left: 8px; display: inline-block; line-height: 0; width: 100%; flex-shrink: 0; font-family: ${fontInfo.css} !important; white-space: nowrap; }
+        .bmc-btn-text { text-align: left; margin-left: 4px; display: inline-block; line-height: 0; width: 100%; flex-shrink: 0; font-family: ${fontInfo.css} !important; white-space: nowrap; }
         .logo-outline { fill: ${outlineColor}; }
         .logo-coffee { fill: ${coffeeColor}; }
       </style>
