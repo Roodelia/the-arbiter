@@ -13,6 +13,7 @@ const {
 } = require("./scryfall");
 const { parseRulingResponse, warnOnMissingParsedSections } = require("./ruling-parse");
 const { formatRulesCitedForClient, resolveRulesCited } = require("./rules-cited");
+const { lookupCaseOwner, isOwnedBySession } = require("./caseOwnership");
 
 class RulingGenerationError extends Error {
   constructor(code, detail) {
@@ -153,20 +154,14 @@ async function resolveCaseId(supabase, clientCaseId, sessionId) {
     return crypto.randomUUID();
   }
 
-  const { data, error } = await supabase
-    .from("cases")
-    .select("session_id")
-    .eq("case_id", clientCaseId)
-    .maybeSingle();
+  const { data, error } = await lookupCaseOwner(supabase, clientCaseId);
 
   if (error) {
     console.error("case_id ownership check failed:", error);
     return crypto.randomUUID();
   }
   if (!data) return clientCaseId;
-  if (typeof sessionId === "string" && sessionId && data.session_id === sessionId) {
-    return clientCaseId;
-  }
+  if (isOwnedBySession(data.session_id, sessionId)) return clientCaseId;
   return crypto.randomUUID();
 }
 
