@@ -609,10 +609,14 @@ export default function Index() {
     try {
     const payload: {
       cards: string[];
+      case_id: string;
+      session_id: string;
       situation?: string;
       category?: string;
     } = {
       cards: selectedCards.map((c) => c.name),
+      case_id: caseId.current,
+      session_id: sessionId,
       ...(categoryPayload ? { category: categoryPayload } : {}),
       ...(situation.trim() ? { situation: situation.trim() } : {}),
     };
