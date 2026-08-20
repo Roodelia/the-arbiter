@@ -164,26 +164,30 @@ test("POST /log - client-supplied cr_version and rag_matches are ignored", async
   assert.strictEqual(row.rag_matches, undefined);
 });
 
-test("POST /log - tracks ask_manajudge when source_event matches, forwarding session_id/consent", async () => {
+test("POST /log - tracks ask_manajudge when source_event matches, forwarding session_id/consent/ip", async () => {
   fakeSupabase.setResult("cases", [
     { data: null, error: null },
     { data: { id: 42 }, error: null },
   ]);
 
-  await request(app).post("/log").send({
-    session_id: "sess-1",
-    case_id: "case-1",
-    cards: ["Lightning Bolt", "Fog"],
-    source_event: "ask_manajudge",
-    analytics_consent: true,
-  });
+  await request(app)
+    .post("/log")
+    .set("X-Forwarded-For", "203.0.113.5")
+    .send({
+      session_id: "sess-1",
+      case_id: "case-1",
+      cards: ["Lightning Bolt", "Fog"],
+      source_event: "ask_manajudge",
+      analytics_consent: true,
+    });
 
   assert.strictEqual(trackCalls.length, 1);
-  const [eventName, distinctId, properties, consent] = trackCalls[0];
+  const [eventName, distinctId, properties, consent, ip] = trackCalls[0];
   assert.strictEqual(eventName, "ask_manajudge");
   assert.strictEqual(distinctId, "sess-1");
   assert.strictEqual(properties.card_count, 2);
   assert.strictEqual(consent, true);
+  assert.strictEqual(ip, "203.0.113.5");
 });
 
 test("POST /log - does not track when source_event is absent or unrecognised", async () => {

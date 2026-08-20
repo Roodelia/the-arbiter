@@ -169,6 +169,7 @@ function createApp({
   });
 
   app.post("/ruling", async (req, res) => {
+    const clientIp = getClientIp(req);
     const {
       cards,
       situation,
@@ -193,6 +194,7 @@ function createApp({
         category: category || undefined,
       },
       analytics_consent,
+      clientIp,
     );
 
     try {
@@ -225,6 +227,7 @@ function createApp({
           cr_version: result.cr_version,
         },
         analytics_consent,
+        clientIp,
       );
 
       return res.json(result);
@@ -244,6 +247,7 @@ function createApp({
           session_id,
           { error_code: err.code },
           analytics_consent,
+          clientIp,
         );
         return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
       }
@@ -253,6 +257,7 @@ function createApp({
         session_id,
         { error_code: "UNKNOWN" },
         analytics_consent,
+        clientIp,
       );
       return res.status(500).json({ error: GENERIC_SERVER_ERROR_MESSAGE });
     }
@@ -310,6 +315,7 @@ function createApp({
           session_id,
           { card_count: cards.length },
           analytics_consent,
+          clientIp,
         );
       }
 
@@ -347,6 +353,7 @@ function createApp({
   });
 
   app.post("/share", async (req, res) => {
+    const clientIp = getClientIp(req);
     const {
       case_id,
       session_id,
@@ -458,6 +465,7 @@ function createApp({
             session_id,
             { card_count: cards.length },
             analytics_consent,
+            clientIp,
           );
           return res.json({
             success: true,

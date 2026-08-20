@@ -45,7 +45,7 @@ export function hasAnalyticsConsent(): boolean {
 export function initAnalytics(sessionId: string): void {
   if (initialized || !IS_WEB || !MIXPANEL_TOKEN || !hasAnalyticsConsent()) return;
 
-  mixpanel.init(MIXPANEL_TOKEN, { autocapture: false, ip: false });
+  mixpanel.init(MIXPANEL_TOKEN, { autocapture: false, ip: true });
   mixpanel.identify(sessionId);
   initialized = true;
 }
