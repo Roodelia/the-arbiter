@@ -1,0 +1,38 @@
+const Mixpanel = require("mixpanel");
+
+/**
+ * Binds a trackEvent function to a given Mixpanel client (or null, if
+ * analytics isn't configured). Split out from the module-level singleton
+ * below so tests can exercise the consent/distinct_id gating logic against
+ * a fake client instead of a real Mixpanel connection.
+ */
+function createTracker(mixpanelClient) {
+  /**
+   * Fires a Mixpanel event. No-ops (never throws) when analytics isn't
+   * configured, consent wasn't given, or there's no distinct_id — tracking
+   * must never block or fail the request it's attached to. ManaJudge has
+   * EU/CA users, so consent must be explicitly `true`, not just truthy.
+   */
+  return function trackEvent(eventName, distinctId, properties = {}, consent) {
+    if (!mixpanelClient) return;
+    if (consent !== true) return;
+    if (typeof distinctId !== "string" || !distinctId.trim()) return;
+
+    try {
+      mixpanelClient.track(eventName, {
+        distinct_id: distinctId,
+        ...properties,
+      });
+    } catch (err) {
+      console.error(`Mixpanel track error (${eventName}):`, err);
+    }
+  };
+}
+
+const mixpanelClient = process.env.MIXPANEL_TOKEN
+  ? Mixpanel.init(process.env.MIXPANEL_TOKEN)
+  : null;
+
+const trackEvent = createTracker(mixpanelClient);
+
+module.exports = { createTracker, trackEvent };
