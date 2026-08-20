@@ -11,8 +11,9 @@ export function ConsentBanner({ onAccept, onDecline }: ConsentBannerProps) {
   return (
     <View style={styles.banner} accessibilityRole="alert">
       <Text style={styles.text}>
-        We use analytics to see how ManaJudge is used and improve it. No personal
-        accounts, no card data sold.
+        ManaJudge uses analytics to understand how the app is used, so we can fix
+        bugs and improve ruling accuracy. This data is never sold or used for
+        advertising. Declining won't limit any app features.
       </Text>
       <View style={styles.actions}>
         <Pressable
