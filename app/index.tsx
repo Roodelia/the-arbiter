@@ -9,6 +9,7 @@ import {
   track,
 } from '@/utils/analytics';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { BuyMeACoffeeButton } from '@/components/BuyMeACoffeeButton';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1127,6 +1128,11 @@ export default function Index() {
               )}
             </View>
           ) : null}
+
+          <View style={[styles.section, styles.step1SupportSection]}>
+            <View style={styles.refineDivider} />
+            <BuyMeACoffeeButton />
+          </View>
         </>
       ) : null}
 
@@ -1704,6 +1710,11 @@ const styles = StyleSheet.create({
   step1FeaturedSection: {
     marginBottom: 12,
     paddingBottom: 12,
+  },
+  step1SupportSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    alignItems: 'center',
   },
   searchRow: {
     flexDirection: 'row',
